@@ -77,6 +77,14 @@ jobs:
          rm kernel_platform/msm-kernel/android/abi_gki_protected_exports_* || echo "No protected exports!"
          sed -i 's/ -dirty//g' kernel_platform/common/scripts/setlocalversion
          sed -i 's/ -dirty//g' kernel_platform/msm-kernel/scripts/setlocalversion
+         sed -i '$s|echo "\$res"|echo "\$res"|' ./common/scripts/setlocalversion
+         sed -i '$s|echo "\$res"|echo "\$res"|' ./msm-kernel/scripts/setlocalversion
+         sed -i '$s|echo "\$res"|echo "\$res"|' ./external/dtc/scripts/setlocalversion
+         sed -i "/stable_scmversion_cmd/s/-maybe-dirty//g" ./build/kernel/kleaf/impl/stamp.bzl || echo "No stamp.bzl!"
+         sed -i 's/-dirty//' ./common/scripts/setlocalversion
+         sed -i 's/-dirty//' ./msm-kernel/scripts/setlocalversion
+         sed -i 's/-dirty//' ./external/dtc/scripts/setlocalversion
+         sed -i 's/-dirty//' ./build/kernel/kleaf/workspace_status_stamp.py || echo "No workspace_status_stamp.py!"
       
       - name: Set up KernelSU Next
         if: github.event.inputs.KSUNEXT_ENABLED == 'true'
@@ -155,6 +163,14 @@ jobs:
           echo "CONFIG_IP6_NF_TARGET_HL=y" >> ./common/arch/arm64/configs/gki_defconfig
           echo "CONFIG_IP6_NF_MATCH_HL=y" >> ./common/arch/arm64/configs/gki_defconfig
          sed -i '2s/check_defconfig//' ./common/build.config.gki
+         sed -i '$s|echo "\$res"|echo "\$res"|' ./common/scripts/setlocalversion
+         sed -i '$s|echo "\$res"|echo "\$res"|' ./msm-kernel/scripts/setlocalversion
+         sed -i '$s|echo "\$res"|echo "\$res"|' ./external/dtc/scripts/setlocalversion
+         sed -i "/stable_scmversion_cmd/s/-maybe-dirty//g" ./build/kernel/kleaf/impl/stamp.bzl || echo "No stamp.bzl!"
+         sed -i 's/-dirty//' ./common/scripts/setlocalversion
+         sed -i 's/-dirty//' ./msm-kernel/scripts/setlocalversion
+         sed -i 's/-dirty//' ./external/dtc/scripts/setlocalversion
+         sed -i 's/-dirty//' ./build/kernel/kleaf/workspace_status_stamp.py || echo "No workspace_status_stamp.py!"
                
       - name: Build kernel
         run: |
