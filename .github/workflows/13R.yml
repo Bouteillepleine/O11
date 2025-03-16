@@ -18,6 +18,10 @@ on:
         description: "Android"
         required: true
         default: 'android14'
+      KERNEL_NAME:
+        description: "kernel Name"
+        required: true
+        default: '-android14-11-o-g9a0c2e9c9f'
       KERNEL_VERSION:
         description: "version"
         required: true
@@ -155,21 +159,12 @@ jobs:
           echo "CONFIG_IP6_NF_TARGET_HL=y" >> ./common/arch/arm64/configs/gki_defconfig
           echo "CONFIG_IP6_NF_MATCH_HL=y" >> ./common/arch/arm64/configs/gki_defconfig
           sed -i '2s/check_defconfig//' ./common/build.config.gki
-      - name: Run sed and perl Commands
+          
+      - name: Add make name
         run: |
-          echo "Changing to configuration directory: kernel_workspace/kernel_platform..."
-          cd kernel_workspace/kernel_platform
-          echo "Running sed commands..."
-          # Run sed commands for modifications
-          sed -i 's/check_defconfig//' ./common/build.config.gki
-          sed -i '$s|echo "\$res"|echo "\$res"|' ./common/scripts/setlocalversion
-          sed -i "/stable_scmversion_cmd/s/-maybe-dirty//g" ./build/kernel/kleaf/impl/stamp.bzl
-          #sed -i 's/-dirty//' ./common/scripts/setlocalversion
-          sed -i '$i res=$(echo "$res" | sed '\''s/-dirty//g'\'')' ./common/scripts/setlocalversion
-          #git add -A
-          #git commit -m "Force remove -dirty suffix from kernel version"
-          # Run perl command to modify UTS_VERSION
-          perl -pi -e 's{UTS_VERSION="\$\(echo \$UTS_VERSION \$CONFIG_FLAGS \$TIMESTAMP \| cut -b -\$UTS_LEN\)"}{UTS_VERSION="#1 SMP PREEMPT Sat Apr 20 04:20:00 UTC 2024"}' ./common/scripts/mkcompile_h
+         cd kernel_workspace/kernel_platform
+         sed -i '$s|echo "\$res"|echo "\${{ github.event.inputs.KERNEL_NAME }}"|' ./common/scripts/setlocalversion
+         sed -i "/stable_scmversion_cmd/s/-maybe-dirty//g" ./build/kernel/kleaf/impl/stamp.bzl
       - name: Build kernel
         run: |
           cd kernel_workspace
