@@ -45,8 +45,8 @@ jobs:
          rm kernel_platform/msm-kernel/android/abi_gki_protected_exports_* || echo "No protected exports!"
          sed -i 's/ -dirty//g' kernel_platform/common/scripts/setlocalversion
          sed -i 's/ -dirty//g' kernel_platform/msm-kernel/scripts/setlocalversion
-         sed -i '$s|echo "\$res"|echo "$res-Wild+"|' kernel_platform/common/scripts/setlocalversion            
-         sed -i '$s|echo "\$res"|echo "$res-Wild+"|' kernel_platform/msm-kernel/scripts/setlocalversion
+         sed -i '$s|echo "\$res"|echo "$res"|' kernel_platform/common/scripts/setlocalversion            
+         sed -i '$s|echo "\$res"|echo "$res"|' kernel_platform/msm-kernel/scripts/setlocalversion
       - name: Force remove -dirty suffix
         run: |
           cd kernel_workspace/kernel_platform
