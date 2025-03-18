@@ -1,81 +1,53 @@
-name: Build OnePlus 13R
+name: Build Kernel Next-SUSFS For 13R
 on:
   workflow_dispatch:
-    inputs:
-      CPU:
-        description: "SM"
-        required: true
-        default: 'sm8650'
-      FEIL:
-        description: "Model"
-        required: true
-        default: 'oneplus_13r'
-      CPUD:
-        description: "pineapple"
-        required: true
-        default: 'pineapple'
-      ANDROID_VERSION:
-        description: "Android"
-        required: true
-        default: 'android14'     
-      KERNEL_VERSION:
-        description: "version"
-        required: true
-        default: '6.1'
-      BUILD_METHOD:
-        description: "gki"
-        required: true
-        default: 'gki'
-      KSUNEXT_ENABLED:
-        description: "KSU Next"
-        required: true
-        type: boolean
-        default: true
-      SUSFS_ENABLED:
-        description: "SUSFS"
-        required: true
-        type: boolean
-        default: true
-      SUSFS_VERSION:
-        description: "SUSFS"
-        required: true
-        default: 'v1.5.5'
 jobs:
   build:
     runs-on: ubuntu-latest
-
+    
     steps:
       - name: Maximize build space
         uses: easimon/maximize-build-space@master
         with:
           root-reserve-mb: 8192
-          temp-reserve-mb: 8192
+          temp-reserve-mb: 2048
           remove-dotnet: 'true'
           remove-android: 'true'
           remove-haskell: 'true'
           remove-codeql: 'true'
 
+      - name: Free disk space
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -qq curl
+          curl -fsSL https://raw.githubusercontent.com/kou/arrow/e49d8ae15583ceff03237571569099a6ad62be32/ci/scripts/util_free_space.sh | bash
+          
       - name: Configure Git
         run: |
-          git config --global user.name "build"
-          git config --global user.email "263623064@qq.com"
+         git config --global user.name "build"
+         git config --global user.email "38@qq.com"
       - name: Install dependencies
         run: |
-          sudo apt update && sudo apt upgrade -y
-          sudo apt install -y python3 git curl patch bc bison flex libssl-dev
+         sudo apt update && sudo apt upgrade -y
+         sudo apt install -y python3 git curl ccache
+          
       - name: Install repo tool
         run: |
-          curl https://storage.googleapis.com/git-repo-downloads/repo > ~/repo
-          chmod a+x ~/repo
-          sudo mv ~/repo /usr/local/bin/repo
-      - name: Initialize repo and sync
+         curl https://storage.googleapis.com/git-repo-downloads/repo > ~/repo
+         chmod a+x ~/repo
+         sudo mv ~/repo /usr/local/bin/repo
+      - name: Initialize repo sync
         run: |
-          mkdir kernel_workspace && cd kernel_workspace
-          repo init -u https://github.com/OnePlusOSS/kernel_manifest.git -b refs/heads/oneplus/${{ github.event.inputs.CPU }} -m ${{ github.event.inputs.FEIL }}.xml --depth=1
-          repo sync -j$(nproc) --force-sync
-          rm kernel_platform/common/android/abi_gki_protected_exports_* || echo "No protected exports!"
-          rm kernel_platform/msm-kernel/android/abi_gki_protected_exports_* || echo "No protected exports!"
-      - name: Force remove -dirty suffix
+         mkdir kernel_workspace && cd kernel_workspace
+         repo init -u https://github.com/OnePlusOSS/kernel_manifest.git -b refs/heads/oneplus/sm8650 -m oneplus_13r.xml --depth=1
+         repo sync
+         rm kernel_platform/common/android/abi_gki_protected_exports_* || echo "No protected exports!"
+         rm kernel_platform/msm-kernel/android/abi_gki_protected_exports_* || echo "No protected exports!"
+         sed -i 's/ -dirty//g' kernel_platform/common/scripts/setlocalversion
+         sed -i 's/ -dirty//g' kernel_platform/msm-kernel/scripts/setlocalversion
+         sed -i '$s|echo "\$res"|echo "$res-Wild+"|' kernel_platform/common/scripts/setlocalversion            
+         sed -i '$s|echo "\$res"|echo "$res-Wild+"|' kernel_platform/msm-kernel/scripts/setlocalversion
+       - name: Force remove -dirty suffix
         run: |
           cd kernel_workspace/kernel_platform
           for script in common/scripts/setlocalversion msm-kernel/scripts/setlocalversion external/dtc/scripts/setlocalversion; do
@@ -83,39 +55,41 @@ jobs:
           done
           git add -A
           git commit -m "Force remove -dirty suffix from kernel version"
+         
       - name: Set up KernelSU Next
-        if: github.event.inputs.KSUNEXT_ENABLED == 'true'
         run: |
-          cd kernel_workspace/kernel_platform
-          curl -LSs "https://raw.githubusercontent.com/rifsxd/KernelSU-Next/next/kernel/setup.sh" | bash -s next
-          cd KernelSU-Next
-          KSU_VERSION=$(expr $(/usr/bin/git rev-list --count HEAD) "+" 10200)
-          echo "KSUVER=$KSU_VERSION" >> $GITHUB_ENV
-          sed -i "s/DKSU_VERSION=11998/DKSU_VERSION=${KSU_VERSION}/" kernel/Makefile
+         cd kernel_workspace/kernel_platform
+         curl -LSs "https://raw.githubusercontent.com/rifsxd/KernelSU-Next/next/kernel/setup.sh" | bash -s next
+         cd KernelSU-Next
+         KSU_VERSION=$(expr $(/usr/bin/git rev-list --count HEAD) "+" 10200)
+         echo "KSUVER=$KSU_VERSION" >> $GITHUB_ENV
+         sed -i "s/DKSU_VERSION=11998/DKSU_VERSION=${KSU_VERSION}/" kernel/Makefile
+        
       - name: Set up susfs
-        if: github.event.inputs.SUSFS_ENABLED == 'true'
         run: |
-          cd kernel_workspace
-          git clone https://gitlab.com/simonpunk/susfs4ksu.git -b gki-${{ github.event.inputs.ANDROID_VERSION }}-${{ github.event.inputs.KERNEL_VERSION }}
-          git clone https://github.com/TheWildJames/kernel_patches.git
-          cd kernel_platform
-          cp ../kernel_patches/next/0001-kernel-patch-susfs-v1.5.5-to-KernelSU-Next-v1.0.5.patch ./KernelSU-Next/
-          cp ../susfs4ksu/kernel_patches/50_add_susfs_in_gki-${{ github.event.inputs.ANDROID_VERSION }}-${{ github.event.inputs.KERNEL_VERSION }}.patch ./common/
-          cp -r ../susfs4ksu/kernel_patches/fs/* ./common/fs/
-          cp -r ../susfs4ksu/kernel_patches/include/linux/* ./common/include/linux/
-          # Apply patches
-          cd ./KernelSU-Next
-          patch -p1 < 0001-kernel-patch-susfs-v1.5.5-to-KernelSU-Next-v1.0.5.patch || true
-          cd ../common
-          patch -p1 < 50_add_susfs_in_gki-${{ github.event.inputs.ANDROID_VERSION }}-${{ github.event.inputs.KERNEL_VERSION }}.patch || true
-          cp ../../kernel_patches/next/next_hooks.patch ./
-          patch -p1 -F 3 < next_hooks.patch
-          cp ../../kernel_patches/69_hide_stuff.patch ./
-          patch -p1 -F 3 < 69_hide_stuff.patch
-          git add -A && git commit -a -m "BUILD Kernel with SUSFS v${{ github.event.inputs.SUSFS_VERSION }}"
-          cd ../msm-kernel
-          git add -A && git commit -a -m "Update for SUSFS"
-          cd ..
+           cd kernel_workspace
+           git clone https://gitlab.com/simonpunk/susfs4ksu.git -b gki-android14-6.1
+           git clone https://github.com/TheWildJames/kernel_patches.git
+           cd kernel_platform
+           cp ../susfs4ksu/kernel_patches/KernelSU/10_enable_susfs_for_ksu.patch ./KernelSU-Next/
+           cp ../susfs4ksu/kernel_patches/50_add_susfs_in_gki-android14-6.1.patch ./common/
+           cp ../kernel_patches/KernelSU-Next-Implement-SUSFS-v1.5.5-Universal.patch ./KernelSU-Next/
+           cp ../susfs4ksu/kernel_patches/fs/* ./common/fs/
+           cp ../susfs4ksu/kernel_patches/include/linux/* ./common/include/linux/
+           # Apply patches
+           cd ./KernelSU-Next
+           patch -p1 < KernelSU-Next-Implement-SUSFS-v1.5.5-Universal.patch || true
+           cd ../common
+           patch -p1 < 50_add_susfs_in_gki-android14-6.1.patch || true
+           cp ../../kernel_patches/69_hide_stuff.patch ./
+           patch -p1 -F 3 < 69_hide_stuff.patch
+           cp ../../kernel_patches/next/next_hooks.patch ./
+           patch -p1 -F 3 < next_hooks.patch
+           git add -A && git commit -a -m "BUILD Kernel"
+           cd ..
+           cd ./msm-kernel && git add -A && git commit -a -m "BUILD Kernel"
+           cd ..
+
       - name: Apply new hook and add configuration
         run: |
           cd kernel_workspace/kernel_platform
@@ -145,23 +119,42 @@ jobs:
           echo "CONFIG_IP6_NF_TARGET_HL=y" >> ./common/arch/arm64/configs/gki_defconfig
           echo "CONFIG_IP6_NF_MATCH_HL=y" >> ./common/arch/arm64/configs/gki_defconfig
           sed -i '2s/check_defconfig//' ./common/build.config.gki
-          
+      - name: Run sed and perl Commands
+        run: |
+          echo "Changing to configuration directory: kernel_workspace/kernel_platform..."
+          cd kernel_workspace/kernel_platform
+          echo "Running sed commands..."
+          # Run sed commands for modifications
+          sed -i 's/check_defconfig//' ./common/build.config.gki
+          sed -i '$s|echo "\$res"|echo "\$res"|' ./common/scripts/setlocalversion
+          sed -i "/stable_scmversion_cmd/s/-maybe-dirty//g" ./build/kernel/kleaf/impl/stamp.bzl
+          #sed -i 's/-dirty//' ./common/scripts/setlocalversion
+          sed -i '$i res=$(echo "$res" | sed '\''s/-dirty//g'\'')' ./common/scripts/setlocalversion
+          #git add -A
+          #git commit -m "Force remove -dirty suffix from kernel version"
+          # Run perl command to modify UTS_VERSION
+          perl -pi -e 's{UTS_VERSION="\$\(echo \$UTS_VERSION \$CONFIG_FLAGS \$TIMESTAMP \| cut -b -\$UTS_LEN\)"}{UTS_VERSION="#1 SMP PREEMPT Sat Apr 20 04:20:00 UTC 2024"}' ./common/scripts/mkcompile_h
+           
       - name: Build kernel
         run: |
-          cd kernel_workspace
-          export LTO=thin
-          ./kernel_platform/oplus/build/oplus_build_kernel.sh ${{ github.event.inputs.CPUD }} ${{ github.event.inputs.BUILD_METHOD }}
+         cd kernel_workspace
+         export LTO=thin
+         #./kernel_platform/oplus/build/oplus_build_kernel.sh pineapple gki
+         ./kernel_platform/build_with_bazel.py \
+            -t pineapple \
+            gki \
+            
       - name: Make AnyKernel3
         run: |
-          git clone https://github.com/Numbersf/AnyKernel3 --depth=1
-          rm -rf ./AnyKernel3/.git
-          cp kernel_workspace/kernel_platform/out/msm-kernel-pineapple-gki/dist/Image ./AnyKernel3/
+         git clone https://github.com/TanakaLun/AnyKernel3 --depth=1
+         rm -rf ./AnyKernel3/.git
+         cp kernel_workspace/kernel_platform/out/msm-kernel-pineapple-gki/dist/Image ./AnyKernel3/
       - name: Download SUSFS Module
         run: |
-          wget https://github.com/sidex15/ksu_module_susfs/releases/latest/download/ksu_module_susfs_1.5.2+.zip
-          cp ksu_module_susfs_1.5.2+.zip ./AnyKernel3/
+         wget https://github.com/sidex15/ksu_module_susfs/releases/latest/download/ksu_module_susfs_1.5.2+.zip
+         cp ksu_module_susfs_1.5.2+.zip ./AnyKernel3/
       - name: Upload AnyKernel3
         uses: actions/upload-artifact@v4
         with:
-          name: AnyKernel3_KernelSU_Next_${{ env.KSUVER }}_${{ github.event.inputs.FEIL }}
-          path: ./AnyKernel3/*
+         name: AK3_KSUN_OPR13R
+         path: ./AnyKernel3/*
