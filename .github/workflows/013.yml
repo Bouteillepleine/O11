@@ -9,7 +9,7 @@ on:
       FEIL:
         description: "Model"
         required: true
-        default: 'JiuGeFaCai_oneplus_13_v.xml'
+        default: 'JiuGeFaCai_oneplus_13_v'
       ANDROID_VERSION:
         description: "Android"
         required: true
