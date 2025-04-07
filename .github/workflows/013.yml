@@ -10,6 +10,10 @@ on:
         description: "Model"
         required: true
         default: 'JiuGeFaCai_oneplus_13_v'
+      CPUD:
+        description: "Model"
+        required: true
+        default: 'sun perf'
       ANDROID_VERSION:
         description: "Android"
         required: true
@@ -152,21 +156,22 @@ jobs:
         run: |
           cd kernel_workspace
           export LTO=thin
-          ./kernel_platform/oplus/build/oplus_build_kernel.sh sun perf
-
+          ./kernel_platform/oplus/build/oplus_build_kernel.sh sun perf GKI
+              
       - name: Make AnyKernel3
         run: |
-          git clone https://github.com/Numbersf/AnyKernel3 --depth=1
-          rm -rf ./AnyKernel3/.git
-          cp kernel_workspace/kernel_platform/out/msm-kernel-kalama-gki/dist/Image ./AnyKernel3/
-
-      - name: Download SUSFS Module
-        run: |
-          wget https://github.com/sidex15/ksu_module_susfs/releases/latest/download/ksu_module_susfs_1.5.2+.zip
-          cp ksu_module_susfs_1.5.2+.zip ./AnyKernel3/
-
+         git clone https://github.com/Kernel-SU/AnyKernel3 --depth=1
+         rm -rf ./AnyKernel3/.git
+         cp kernel_workspace/kernel_platform/out/msm-${{ github.event.inputs.CPUD }}-${{ github.event.inputs.CPUD }}-gki/dist/Image ./AnyKernel3/
       - name: Upload AnyKernel3
         uses: actions/upload-artifact@v4
         with:
-          name: AnyKernel3_KernelSU_Next_${{ env.KSUVER }}_${{ github.event.inputs.FEIL }}
-          path: ./AnyKernel3/*
+         name: AnyKernel3_KernelSU_Next_${{ env.KSUVER }}_${{ github.event.inputs.FEIL }}
+         path: ./AnyKernel3/*
+         
+      - name: Upload Image
+        uses: actions/upload-artifact@v4
+        with:
+         name: Image_KernelSU_Next_${{ env.KSUVER }}_${{ github.event.inputs.FEIL }}
+         path: kernel_workspace/kernel_platform/out/msm-kernel-${{ github.event.inputs.CPUD }}-gki/dist/Image
+
