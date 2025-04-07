@@ -1,23 +1,23 @@
-name: Build Kernel For 011
+name: Build Kernel For 013
 on:
   workflow_dispatch:
     inputs:
       CPU:
         description: "SM"
         required: true
-        default: 'sm8550'
+        default: 'sm8750'
       FEIL:
         description: "Model"
         required: true
-        default: 'oneplus_11_v'
+        default: 'JiuGeFaCai_oneplus_13_v.xml'
       ANDROID_VERSION:
         description: "Android"
         required: true
-        default: 'android13'
+        default: 'android15'
       KERNEL_VERSION:
         description: "Version"
         required: true
-        default: '5.15'
+        default: '6.6'
       BUILD_METHOD:
         description: "GKI"
         required: true
@@ -146,7 +146,7 @@ jobs:
         run: |
          cd kernel_workspace
          export LTO=thin
-         ./kernel_platform/oplus/build/oplus_build_kernel.sh kalama gki
+         ./kernel_platform/oplus/build/oplus_build_kernel.sh sun perf
          
       - name: Make AnyKernel3
         run: |
