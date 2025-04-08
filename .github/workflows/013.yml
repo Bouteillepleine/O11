@@ -57,19 +57,18 @@ jobs:
 
       - name: Configure Git
         run: |
-          git config --global user.name "build"
-          git config --global user.email "263623064@qq.com"
-          
+         git config --global user.name "build"
+         git config --global user.email "build@build.com"
       - name: Install dependencies
         run: |
-          sudo apt update && sudo apt upgrade -y
-          sudo apt install -y python3 git curl patch bc bison flex libssl-dev
-
+         sudo apt-get update
+         sudo apt-get autopurge -y php* firefox* snap* 
+         sudo apt-get install -y python3 git curl
       - name: Install repo tool
         run: |
-          curl https://storage.googleapis.com/git-repo-downloads/repo > ~/repo
-          chmod a+x ~/repo
-          sudo mv ~/repo /usr/local/bin/repo
+         curl https://storage.googleapis.com/git-repo-downloads/repo > ~/repo
+         chmod a+x ~/repo
+         sudo mv ~/repo /usr/local/bin/repo
 
       - name: Initialize repo and sync
         run: |
