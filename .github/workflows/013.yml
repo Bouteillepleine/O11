@@ -26,11 +26,11 @@ on:
       KSUNEXT_ENABLED:
         description: "Enable KernelSU Next"
         required: true
-        default: 'false'
+        default: 'true'
       SUSFS_ENABLED:
         description: "Enable susfs"
         required: true
-        default: 'false'
+        default: 'true'
 
 jobs:
   build:
