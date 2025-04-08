@@ -147,8 +147,8 @@ jobs:
       - name: Build kernel
         run: |
           cd kernel_workspace
-          ./kernel_platform/oplus/build/oplus_build_kernel.sh sun perf GKI
-              
+          ./kernel_platform/oplus/build/oplus_build_kernel.sh sun perf
+          
       - name: Make AnyKernel3
         run: |
          git clone https://github.com/Kernel-SU/AnyKernel3 --depth=1
