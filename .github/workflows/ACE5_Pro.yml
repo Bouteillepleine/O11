@@ -1,4 +1,5 @@
-name: Build Kernel For Ace5_Pro
+name: Build OnePlusOSS
+
 on:
   workflow_dispatch:
     inputs:
@@ -7,70 +8,60 @@ on:
         required: true
         default: 'sm8750'
       FEIL:
-        description: "Model"
+        description: "Manifest"
         required: true
         default: 'JiuGeFaCai_oneplus_ace5_pro_v'
+      CPUD:
+        description: "sun"
+        required: true
+        default: 'sun'
       ANDROID_VERSION:
-        description: "Android"
+        description: "android"
         required: true
         default: 'android15'
-      CPUD:
-        description: "Model"
-        required: true
-        default: 'sun perf'
       KERNEL_VERSION:
-        description: "Version"
+        description: "version"
         required: true
         default: '6.6'
-      BUILD_METHOD:
-        description: "GKI"
-        required: true
-        default: 'gki'
       KSUNEXT_ENABLED:
-        description: "KSU Next"
+        description: "Enable KernelSU Next"
         required: true
-        type: boolean
-        default: true
+        default: 'true'
       SUSFS_ENABLED:
-        description: "SUSFS"
+        description: "Enable susfs"
         required: true
-        type: boolean
-        default: true
-      SUSFS_VERSION:
-        description: "SUSFS"
-        required: true
-        default: 'v1.5.5'
+        default: 'true'
+
 jobs:
   build:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
 
     steps:
       - name: Maximize build space
         uses: easimon/maximize-build-space@master
         with:
           root-reserve-mb: 8192
-          temp-reserve-mb: 8192
+          temp-reserve-mb: 2048
           remove-dotnet: 'true'
           remove-android: 'true'
           remove-haskell: 'true'
           remove-codeql: 'true'
+          remove-docker-images: 'true'
 
       - name: Configure Git
         run: |
           git config --global user.name "build"
-          git config --global user.email "263623064@qq.com"
-
+          git config --global user.email "build@build.com"
       - name: Install dependencies
         run: |
-          sudo apt update && sudo apt upgrade -y
-          sudo apt install -y python3 git curl patch bc bison flex libssl-dev
-
+          sudo apt-get update
+          sudo apt-get autopurge -y php* firefox* snap*
+          sudo apt-get install -y python3 git curl
       - name: Install repo tool
         run: |
           curl https://storage.googleapis.com/git-repo-downloads/repo > ~/repo
           chmod a+x ~/repo
           sudo mv ~/repo /usr/local/bin/repo
-
       - name: Initialize repo and sync
         run: |
           mkdir kernel_workspace && cd kernel_workspace
@@ -80,19 +71,17 @@ jobs:
           rm kernel_platform/msm-kernel/android/abi_gki_protected_exports_* || echo "No protected exports!"
           sed -i 's/ -dirty//g' kernel_platform/common/scripts/setlocalversion
           sed -i 's/ -dirty//g' kernel_platform/msm-kernel/scripts/setlocalversion
-          sed -i '$s|echo "\$res"|echo "$res"|' kernel_platform/common/scripts/setlocalversion            
-          sed -i '$s|echo "\$res"|echo "$res"|' kernel_platform/msm-kernel/scripts/setlocalversion
-
+      # New steps to set up KernelSU Next
       - name: Set up KernelSU Next
         if: github.event.inputs.KSUNEXT_ENABLED == 'true'
         run: |
           cd kernel_workspace/kernel_platform
-          curl -LSs "https://raw.githubusercontent.com/rifsxd/KernelSU-Next/next/kernel/setup.sh" | bash -s next
+          curl -LSs "https://raw.githubusercontent.com/rifsxd/KernelSU-Next/next/kernel/setup.sh" | bash -s next-susfs-dev
           cd KernelSU-Next
           KSU_VERSION=$(expr $(/usr/bin/git rev-list --count HEAD) "+" 10200)
           echo "KSUVER=$KSU_VERSION" >> $GITHUB_ENV
           sed -i "s/DKSU_VERSION=11998/DKSU_VERSION=${KSU_VERSION}/" kernel/Makefile
-
+      # New steps to set up susfs
       - name: Set up susfs
         if: github.event.inputs.SUSFS_ENABLED == 'true'
         run: |
@@ -114,7 +103,7 @@ jobs:
           cp ../../kernel_patches/69_hide_stuff.patch ./
           patch -p1 -F 3 < 69_hide_stuff.patch
           patch -p1 -F 3 < syscall_hooks.patch
-
+      # Apply new hook and add configuration (moved here)
       - name: Apply new hook and add configuration
         run: |
           cd kernel_workspace/kernel_platform
@@ -143,34 +132,24 @@ jobs:
           echo "CONFIG_IP_NF_TARGET_TTL=y" >> ./common/arch/arm64/configs/gki_defconfig
           echo "CONFIG_IP6_NF_TARGET_HL=y" >> ./common/arch/arm64/configs/gki_defconfig
           echo "CONFIG_IP6_NF_MATCH_HL=y" >> ./common/arch/arm64/configs/gki_defconfig
-          # Add additional config setting
-          echo "CONFIG_SCHED_CLASS_EXT=y" >> ./common/arch/arm64/configs/gki_defconfig
-          echo "CONFIG_SMP=y" >> ./common/arch/arm64/configs/gki_defconfig
-          echo "CONFIG_CPU_FREQ_GOV_SCHEDUTIL=y" >> ./common/arch/arm64/configs/gki_defconfig
-          echo "CONFIG_MSM_PERFORMANCE=y" >> ./common/arch/arm64/configs/gki_defconfig
-          echo "CONFIG_NO_HZ_IDLE=y" >> ./common/arch/arm64/configs/gki_defconfig
-          echo "CONFIG_PM_SLEEP_SMP=y" >> ./common/arch/arm64/configs/gki_defconfig
           sed -i '2s/check_defconfig//' ./common/build.config.gki >> ./common/arch/arm64/configs/gki_defconfig
-
       - name: Build kernel
         run: |
           cd kernel_workspace
-          export LTO=thin
-          ./kernel_platform/oplus/build/oplus_build_kernel.sh sun perf GKI
-              
+          ./kernel_platform/oplus/build/oplus_build_kernel.sh ${{ github.event.inputs.CPUD }} perf
       - name: Make AnyKernel3
         run: |
-         git clone https://github.com/Kernel-SU/AnyKernel3 --depth=1
-         rm -rf ./AnyKernel3/.git
-         cp kernel_workspace/kernel_platform/out/msm-${{ github.event.inputs.CPUD }}-${{ github.event.inputs.CPUD }}-gki/dist/Image ./AnyKernel3/
+          git clone https://github.com/Kernel-SU/AnyKernel3 --depth=1
+          rm -rf ./AnyKernel3/.git
+          cp kernel_workspace/kernel_platform/out/msm-kernel-${{ github.event.inputs.CPUD }}-perf/dist/Image ./AnyKernel3/
       - name: Upload AnyKernel3
         uses: actions/upload-artifact@v4
         with:
-         name: AnyKernel3_KernelSU_Next_${{ env.KSUVER }}_${{ github.event.inputs.FEIL }}
-         path: ./AnyKernel3/*
-         
+          name: AnyKernel3_${{ github.event.inputs.FEIL }}
+          path: ./AnyKernel3/*
+
       - name: Upload Image
         uses: actions/upload-artifact@v4
         with:
-         name: Image_KernelSU_Next_${{ env.KSUVER }}_${{ github.event.inputs.FEIL }}
-         path: kernel_workspace/kernel_platform/out/msm-kernel-${{ github.event.inputs.CPUD }}-gki/dist/Image
+          name: Image_${{ github.event.inputs.FEIL }}
+          path: kernel_workspace/kernel_platform/out/msm-kernel-${{ github.event.inputs.CPUD }}-gki/dist/Image
