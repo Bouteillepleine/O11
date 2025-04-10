@@ -1,4 +1,4 @@
-name: Build and Release OnePlus Kernels
+name: 13R
 
 permissions:
   contents: write
@@ -42,7 +42,7 @@ jobs:
             sphinxsearch subversion mongodb-org microsoft-edge-stable || true
           
           # Regex-based purges (for bulk families like mysql, php, dotnet)
-          sudo apt-get purge -y $(dpkg-query -W -f='${binary:Package}\n' | grep -E '^mysql|^php|^dotnet') || true
+          sudo apt-get purge -y <span class="math-inline">\(dpkg\-query \-W \-f\='</span>{binary:Package}\n' | grep -E '^mysql|^php|^dotnet') || true
           
           # Clean up
           sudo apt-get autoremove -y
@@ -96,20 +96,19 @@ jobs:
           
           # Sync repo and apply patches
           $REPO --version
-          $REPO --trace sync -c -j$(nproc --all) --no-tags --fail-fast
+          <span class="math-inline">REPO \-\-trace sync \-c \-j</span>(nproc --all) --no-tags --fail-fast
       
       - name: Add KernelSU
         run: |
           echo "Changing to configuration directory: $CONFIG..."
-          cd "$CONFIG/kernel_platform"          
-          echo "Adding KernelSU..."
-          curl -LSs "https://raw.githubusercontent.com/KernelSU-Next/KernelSU-Next/next/kernel/setup.sh" | bash -s next
-          
-          git submodule update --init --recursive
-          cd KernelSU-Next/kernel
-          KSU_VERSION=$(expr $(/usr/bin/git rev-list --count HEAD) "+" 10200)
-          echo "KSUVER=$KSU_VERSION" >> $GITHUB_ENV
-          sed -i "s/DKSU_VERSION=11998/DKSU_VERSION=${KSU_VERSION}/" Makefile
+          cd "<span class="math-inline">CONFIG/kernel\_platform"          
+echo "Adding KernelSU\.\.\."
+curl \-LSs "https\://raw\.githubusercontent\.com/KernelSU\-Next/KernelSU\-Next/next/kernel/setup\.sh" \| bash \-s next
+git submodule update \-\-init \-\-recursive
+cd KernelSU\-Next/kernel
+KSU\_VERSION\=</span>(expr $(/usr/bin/git rev-list --count HEAD) "+" 10200)
+          echo "KSUVER=$KSU_VERSION" >> <span class="math-inline">GITHUB\_ENV
+sed \-i "s/DKSU\_VERSION\=11998/DKSU\_VERSION\=</span>{KSU_VERSION}/" Makefile
 
       - name: Apply SUSFS Patches
         run: |
@@ -153,7 +152,12 @@ jobs:
       - name: Add SUSFS Configuration Settings
         run: |
           echo "Changing to configuration directory: $CONFIG..."
-          cd "$CONFIG/kernel_platform"          
+          cd "$CONFIG/kernel_platform"
+          
+          # Create the directory and file if they don't exist
+          mkdir -p ./common/arch/arm64/configs
+          touch ./common/arch/arm64/configs/gki_defconfig
+          
           echo "Adding configuration settings to gki_defconfig..."
 
           # Add KSU configuration settings
@@ -205,7 +209,6 @@ jobs:
           echo "CONFIG_TIMER_STATS=n" >> ./common/arch/arm64/configs/gki_defconfig
           echo "CONFIG_PROVE_LOCKING=n" >> ./common/arch/arm64/configs/gki_defconfig
           echo "CONFIG_LOCKDEP=n" >> ./common/arch/arm64/configs/gki_defconfig
-          echo "CONFIG_DEBUG_PREEMPT=n" >> ./common/arch/arm64/configs/gki_defconfig
 
       - name: Run sed and perl Commands
         run: |
