@@ -1,0 +1,232 @@
+name: Build OnePlus Ace 5 Kernelsu VFS With BBR3
+
+on:
+  workflow_call:  # This allows this workflow to be called from another workflow
+  workflow_dispatch:
+   
+jobs:
+  Build-OnePlus-Ace-5-Kernelsu-VFS-With-BBR3:
+    runs-on: ubuntu-22.04
+
+    steps:
+      - name: Maximize build space
+        uses: easimon/maximize-build-space@master
+        with:
+          root-reserve-mb: 8192
+          temp-reserve-mb: 4096
+          swap-size-mb: 8192
+          remove-dotnet: 'true'
+          remove-android: 'true'
+          remove-haskell: 'true'
+          remove-codeql: 'true'
+
+      - name: Get build space
+        run: |
+          free -h
+          df -h
+          
+      - name: Set CONFIG Environment Variable
+        run: |
+          # Set CONFIG dynamically based on matrix values
+          CONFIG="opace5"
+          
+          # Set CONFIG as an environment variable for future steps
+          echo "CONFIG=$CONFIG" >> $GITHUB_ENV
+          
+          echo "CONFIG set to: $CONFIG"
+      
+      - name: Install Repo
+        run: |
+          # Install dependencies
+          mkdir -p ./git-repo
+          curl https://storage.googleapis.com/git-repo-downloads/repo > ./git-repo/repo
+          chmod a+rx ./git-repo/repo
+          echo "REPO=$GITHUB_WORKSPACE/./git-repo/repo" >> $GITHUB_ENV
+      
+      - name: Clone AnyKernel3 and Other Dependencies
+        run: |
+          echo "Cloning AnyKernel3 and other dependencies..."
+    
+          # Define the branch names using the matrix values
+          # ANYKERNEL_BRANCH="android14-6.1"
+          SUSFS_BRANCH="gki-android14-6.1"
+
+          # Debug print the branches
+          echo "Using branch for AnyKernel3: $ANYKERNEL_BRANCH"
+          echo "Using branch for SUSFS: $SUSFS_BRANCH"
+
+          # Clone repositories using the branch names
+          git clone https://github.com/Kernel-SU/AnyKernel3 --depth=1
+          git clone https://gitlab.com/simonpunk/susfs4ksu.git -b "$SUSFS_BRANCH"
+          git clone https://github.com/TheWildJames/kernel_patches.git
+          git clone https://github.com/google/bbr.git -b v3
+        
+      - name: Initialize and Sync Kernel Source
+        run: |
+          echo "Creating folder for configuration: $CONFIG..."
+          mkdir -p "$CONFIG"
+          cd "$CONFIG"
+          
+          # Initialize and sync kernel source
+          echo "Initializing and syncing kernel source..."
+          $REPO init -u https://github.com/MClengchuan/oneplus_kernel_manifest.git -b refs/heads/oneplus/sm8650 -m oneplus_ace5_v.xml --repo-rev=v2.16 --depth=1
+          
+          # Sync repo and apply patches
+          $REPO --version
+          $REPO --trace sync -c -j$(nproc --all) --no-tags --fail-fast      
+      
+      - name: Add BBRV3
+        run: |
+          echo "Add BBRV3"
+          cd "$CONFIG/kernel_platform"
+          cp /home/runner/work/Action-KernelSU-Next/Action-KernelSU-Next/bbr/net/ipv4/tcp_bbr.c ./common/net/ipv4/
+      
+      - name: Add KernelSU-Next
+        run: |
+          echo "Changing to configuration directory: $CONFIG..."
+          cd "$CONFIG/kernel_platform"
+          echo "Adding KernelSU..."
+          curl -LSs "https://raw.githubusercontent.com/rifsxd/KernelSU-Next/next/kernel/setup.sh" | bash -s next
+          cd ./KernelSU-Next/kernel
+          ls -la /home/runner/work/Action-KernelSU-Next/Action-KernelSU-Next/opace5/kernel_platform/KernelSU-Next/
+          #sed -i 's/ccflags-y += -DKSU_VERSION=11998/ccflags-y += -DKSU_VERSION=12453/' ./Makefile
+          
+          GIT_COMMIT_COUNT=$(/usr/bin/git rev-list --count HEAD)
+          echo "Git commit count: $GIT_COMMIT_COUNT"
+          
+          KSU_VERSION=$(expr $GIT_COMMIT_COUNT + 10198)
+          echo "KSUVER=$KSU_VERSION" >> $GITHUB_ENV
+          sed -i "s/DKSU_VERSION=11998/DKSU_VERSION=${KSU_VERSION}/" ./Makefile
+          
+      - name: Apply SUSFS Patches
+        run: |
+          echo "Changing to configuration directory: $CONFIG..."
+          cd "$CONFIG/kernel_platform"
+          
+          echo "Applying SUSFS patches..."
+          
+          # Copy SUSFS patches
+          # cp ../../susfs4ksu/kernel_patches/KernelSU/10_enable_susfs_for_ksu.patch ./KernelSU-Next/
+          cp /home/runner/work/Action-KernelSU-Next/Action-KernelSU-Next/susfs4ksu/kernel_patches/50_add_susfs_in_gki-android14-6.1.patch ./common/
+          cp /home/runner/work/Action-KernelSU-Next/Action-KernelSU-Next/susfs4ksu/kernel_patches/fs/* ./common/fs/
+          cp /home/runner/work/Action-KernelSU-Next/Action-KernelSU-Next/susfs4ksu/kernel_patches/include/linux/* ./common/include/linux/
+          cd ./KernelSU-Next
+          
+          # Apply SUSFS patch for KernelSU
+          # patch -p1 --forward < 10_enable_susfs_for_ksu.patch || true
+          
+          # Change to common directory and apply SUSFS patch
+          cd ../common
+          patch -p1 < 50_add_susfs_in_gki-android14-6.1.patch || true
+          
+      - name: Apply Next-SUSFS Patches
+        run: |
+          ls -la /home/runner/work/Action-KernelSU-Next/Action-KernelSU-Next/opace5/kernel_platform/
+          #find . -path './opace5/vendor' -prune -o -type f -exec ls -la {} +
+          echo "Changing to configuration directory: $CONFIG..."
+          
+          #cd /home/runner/work/Action-KernelSU-Next/Action-KernelSU-Next/opace5/kernel_platform/KernelSU-Next/
+          cd /home/runner/work/Action-KernelSU-Next/Action-KernelSU-Next/opace5/kernel_platform/
+          cd ./KernelSU-Next
+          echo "Applying next SUSFS patches..."
+          cp /home/runner/work/Action-KernelSU-Next/Action-KernelSU-Next/kernel_patches/next/0001-kernel-patch-susfs-v1.5.5-to-KernelSU-Next-v1.0.5.patch ./
+          patch -p1 --forward < 0001-kernel-patch-susfs-v1.5.5-to-KernelSU-Next-v1.0.5.patch || true
+          
+          cd /home/runner/work/Action-KernelSU-Next/Action-KernelSU-Next/opace5/kernel_platform/common
+          cp /home/runner/work/Action-KernelSU-Next/Action-KernelSU-Next/kernel_patches/next/syscall_hooks.patch ./
+          patch -p1 -F 3 < syscall_hooks.patch
+          
+          #cp ../../kernel_patches/selinux.c_fix.patch ./
+          #patch -p1 -F 3 < selinux.c_fix.patch
+      
+      - name: Apply Hide Stuff Patches
+        run: |
+          echo "Changing to configuration directory: $CONFIG..."
+          cd /home/runner/work/Action-KernelSU-Next/Action-KernelSU-Next/opace5/kernel_platform/common
+          # Apply additional patch
+          cp /home/runner/work/Action-KernelSU-Next/Action-KernelSU-Next/kernel_patches/69_hide_stuff.patch ./
+          patch -p1 -F 3 < 69_hide_stuff.patch || true
+      
+      - name: Add SUSFS Configuration Settings
+        run: |
+          echo "Changing to configuration directory: $CONFIG..."
+          cd "$CONFIG/kernel_platform"
+          
+          echo "Adding configuration settings to gki_defconfig..."
+          
+          # Add SUSFS configuration settings
+          echo "CONFIG_KSU_WITH_KPROBES=n" >> ./common/arch/arm64/configs/gki_defconfig
+          echo "CONFIG_KSU_SUSFS_SUS_SU=n" >> ./common/arch/arm64/configs/gki_defconfig 
+          echo "CONFIG_KSU_SUSFS_SUS_OVERLAYFS=n" >> ./common/arch/arm64/configs/gki_defconfig
+          echo "CONFIG_KSU_SUSFS=y" >> ./common/arch/arm64/configs/gki_defconfig
+          echo "CONFIG_KSU_SUSFS_HAS_MAGIC_MOUNT=y" >> ./common/arch/arm64/configs/gki_defconfig
+          echo "CONFIG_KSU_SUSFS_SUS_PATH=y" >> ./common/arch/arm64/configs/gki_defconfig
+          echo "CONFIG_KSU_SUSFS_SUS_MOUNT=y" >> ./common/arch/arm64/configs/gki_defconfig
+          echo "CONFIG_KSU_SUSFS_AUTO_ADD_SUS_KSU_DEFAULT_MOUNT=y" >> ./common/arch/arm64/configs/gki_defconfig
+          echo "CONFIG_KSU_SUSFS_AUTO_ADD_SUS_BIND_MOUNT=y" >> ./common/arch/arm64/configs/gki_defconfig
+          echo "CONFIG_KSU_SUSFS_SUS_KSTAT=y" >> ./common/arch/arm64/configs/gki_defconfig
+          echo "CONFIG_KSU_SUSFS_TRY_UMOUNT=y" >> ./common/arch/arm64/configs/gki_defconfig
+          echo "CONFIG_KSU_SUSFS_AUTO_ADD_TRY_UMOUNT_FOR_BIND_MOUNT=y" >> ./common/arch/arm64/configs/gki_defconfig
+          echo "CONFIG_KSU_SUSFS_SPOOF_UNAME=y" >> ./common/arch/arm64/configs/gki_defconfig
+          echo "CONFIG_KSU_SUSFS_ENABLE_LOG=y" >> ./common/arch/arm64/configs/gki_defconfig
+          echo "CONFIG_KSU_SUSFS_HIDE_KSU_SUSFS_SYMBOLS=y" >> ./common/arch/arm64/configs/gki_defconfig
+          echo "CONFIG_KSU_SUSFS_SPOOF_CMDLINE_OR_BOOTCONFIG=y" >> ./common/arch/arm64/configs/gki_defconfig
+          echo "CONFIG_KSU_SUSFS_OPEN_REDIRECT=y" >> ./common/arch/arm64/configs/gki_defconfig
+
+          echo "CONFIG_TCP_CONG_BBR=y" >> ./common/arch/arm64/configs/gki_defconfig
+          echo "CONFIG_DEFAULT_TCP_CONG=\"bbr\"" >> ./common/arch/arm64/configs/gki_defconfig
+      
+      - name: Run sed and perl Commands
+        run: |
+          echo "Changing to configuration directory: $CONFIG..."
+          cd "$CONFIG/kernel_platform"
+          
+          echo "Running sed commands..."
+          
+          # Run sed commands for modifications
+          sed -i 's/check_defconfig//' ./common/build.config.gki
+          sed -i '$s|echo "\$res"|echo "\$res-VFS"|' ./common/scripts/setlocalversion
+          sed -i "/stable_scmversion_cmd/s/-maybe-dirty//g" ./build/kernel/kleaf/impl/stamp.bzl
+          #sed -i 's/-dirty//' ./common/scripts/setlocalversion
+          sed -i '$i res=$(echo "$res" | sed '\''s/-dirty//g'\'')' ./common/scripts/setlocalversion
+          #git add -A
+          #git commit -m "Force remove -dirty suffix from kernel version"
+          # Run perl command to modify UTS_VERSION
+          perl -pi -e 's{UTS_VERSION="\$\(echo \$UTS_VERSION \$CONFIG_FLAGS \$TIMESTAMP \| cut -b -\$UTS_LEN\)"}{UTS_VERSION="#1 SMP PREEMPT Sat Apr 20 04:20:00 UTC 2024"}' ./common/scripts/mkcompile_h
+      
+      - name: Build the Kernel
+        run: |
+          echo "Changing to configuration directory: $CONFIG..."
+          cd "$CONFIG"
+          
+          echo "Building the kernel..."
+          rm -rf ./kernel_platform/common/android/abi_gki_protected_exports_*
+          #git config --global user.email "bins4us@hotmail.com"
+          #git config --global user.name "TheWildJames"
+          #git add *
+          #git commit -s -a -m "getting rid of -dirty"
+          ./kernel_platform/oplus/build/oplus_build_kernel.sh pineapple gki
+      
+      - name: Create Bootimgs Folder and Copy Images
+        run: |
+          echo "Changing to configuration directory: $CONFIG..."
+          cd "$CONFIG"
+          
+          echo "Copying Image"
+          cp ./out/dist/Image ../AnyKernel3/Image
+          
+      - name: Create ZIP Files for Different Formats
+        run: |
+          echo "Creating zip files for all formats..."
+          cd ./AnyKernel3
+          
+          ZIP_NAME="AnyKernel3_KernelSU_Next_VFS_${KSUVER}_oneplus_ace5.zip"
+          echo "Creating zip file $ZIP_NAME..."
+          zip -r "../$ZIP_NAME" ./*
+          
+      - name: Upload Build Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: kernel-${{ env.CONFIG }}
+          path: |
+            *.zip
