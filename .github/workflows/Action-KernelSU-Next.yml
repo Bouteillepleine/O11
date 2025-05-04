@@ -1,11 +1,11 @@
-name: Build OnePlus Ace 5 Kernelsu
+name: Build OnePlus 13R
 
 on:
   workflow_call:  # This allows this workflow to be called from another workflow
   workflow_dispatch:
    
 jobs:
-  Build-OnePlus-Ace-5-Kernelsu-VFS-With-BBR3:
+  Build-OnePlus-13R-KSUN:
     runs-on: ubuntu-22.04
 
     steps:
@@ -28,7 +28,7 @@ jobs:
       - name: Set CONFIG Environment Variable
         run: |
           # Set CONFIG dynamically based on matrix values
-          CONFIG="opace5"
+          CONFIG="13R"
           
           # Set CONFIG as an environment variable for future steps
           echo "CONFIG=$CONFIG" >> $GITHUB_ENV
@@ -69,7 +69,7 @@ jobs:
           
           # Initialize and sync kernel source
           echo "Initializing and syncing kernel source..."
-          $REPO init -u https://github.com/MClengchuan/oneplus_kernel_manifest.git -b refs/heads/oneplus/sm8650 -m oneplus_ace5_v.xml --repo-rev=v2.16 --depth=1
+          $REPO init -u https://github.com/OnePlusOSS/oneplus_kernel_manifest.git -b refs/heads/oneplus/sm8650 -m oneplus_13r.xml --repo-rev=v2.16 --depth=1
           
           # Sync repo and apply patches
           $REPO --version
@@ -88,7 +88,7 @@ jobs:
           echo "Adding KernelSU..."
           curl -LSs "https://raw.githubusercontent.com/rifsxd/KernelSU-Next/next/kernel/setup.sh" | bash -s next
           cd ./KernelSU-Next/kernel
-          ls -la /home/runner/work/O11/O11/opace5/kernel_platform/KernelSU-Next/
+          ls -la /home/runner/work/O11/O11/13R/kernel_platform/KernelSU-Next/
           # sed -i 's/ccflags-y += -DKSU_VERSION=11998/ccflags-y += -DKSU_VERSION=12453/' ./Makefile
           
           GIT_COMMIT_COUNT=$(/usr/bin/git rev-list --count HEAD)
@@ -121,18 +121,18 @@ jobs:
           
       - name: Apply Next-SUSFS Patches
         run: |
-          ls -la /home/runner/work/O11/O11/opace5/kernel_platform/
-          # find . -path './opace5/vendor' -prune -o -type f -exec ls -la {} +
+          ls -la /home/runner/work/O11/O11/13R/kernel_platform/
+          # find . -path './13R/vendor' -prune -o -type f -exec ls -la {} +
           echo "Changing to configuration directory: $CONFIG..."
           
-          # cd /home/runner/work/O11/O11/opace5/kernel_platform/KernelSU-Next/
-          cd /home/runner/work/O11/O11/opace5/kernel_platform/
+          # cd /home/runner/work/O11/O11/13R/kernel_platform/KernelSU-Next/
+          cd /home/runner/work/O11/O11/13R/kernel_platform/
           cd ./KernelSU-Next
           echo "Applying next SUSFS patches..."
           cp /home/runner/work/O11/O11/kernel_patches/next/kernel-patch-susfs-v1.5.7-to-KernelSU-Next.patch ./
           patch -p1 --forward < kernel-patch-susfs-v1.5.7-to-KernelSU-Next.patch || true
 
-          cd /home/runner/work/O11/O11/opace5/kernel_platform/common
+          cd /home/runner/work/O11/O11/13R/kernel_platform/common
           cp /home/runner/work/O11/O11/kernel_patches/next/syscall_hooks.patch ./
           patch -p1 -F 3 < syscall_hooks.patch
           
@@ -142,7 +142,7 @@ jobs:
       - name: Apply Hide Stuff Patches
         run: |
           echo "Changing to configuration directory: $CONFIG..."
-          cd /home/runner/work/O11/O11/opace5/kernel_platform/common
+          cd /home/runner/work/O11/O11/13R/kernel_platform/common
           # Apply additional patch
           cp /home/runner/work/O11/O11/kernel_patches/69_hide_stuff.patch ./
           patch -p1 -F 3 < 69_hide_stuff.patch || true
@@ -185,7 +185,7 @@ jobs:
           
           # Run sed commands for modifications
           sed -i 's/check_defconfig//' ./common/build.config.gki
-          sed -i '$s|echo "\$res"|echo "\$res-VFS"|' ./common/scripts/setlocalversion
+          sed -i '$s|echo "\$res"|echo "\$res"|' ./common/scripts/setlocalversion
           sed -i "/stable_scmversion_cmd/s/-maybe-dirty//g" ./build/kernel/kleaf/impl/stamp.bzl
           # sed -i 's/-dirty//' ./common/scripts/setlocalversion
           sed -i '$i res=$(echo "$res" | sed '\''s/-dirty//g'\'')' ./common/scripts/setlocalversion
@@ -214,7 +214,7 @@ jobs:
           echo "Creating zip files for all formats..."
           cd ./AnyKernel3
           
-          ZIP_NAME="AnyKernel3_KernelSU_Next_VFS_${KSUVER}_oneplus_ace5.zip"
+          ZIP_NAME="AK3_KSUN_${KSUVER}_O+_13R.zip"
           echo "Creating zip file $ZIP_NAME..."
           zip -r "../$ZIP_NAME" ./*
           
