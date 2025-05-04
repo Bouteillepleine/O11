@@ -81,22 +81,17 @@ jobs:
           cd "$CONFIG/kernel_platform"
           cp /home/runner/work/O11/O11/bbr/net/ipv4/tcp_bbr.c ./common/net/ipv4/
       
-      - name: Add KernelSU-Next
+      - name: Add KernelSU
         run: |
           echo "Changing to configuration directory: $CONFIG..."
-          cd "$CONFIG/kernel_platform"
+          cd "$CONFIG/kernel_platform"          
           echo "Adding KernelSU..."
-          curl -LSs "https://raw.githubusercontent.com/rifsxd/KernelSU-Next/next/kernel/setup.sh" | bash -s next
-          cd ./KernelSU-Next/kernel
-          ls -la /home/runner/work/O11/O11/13R/kernel_platform/KernelSU-Next/
-          # sed -i 's/ccflags-y += -DKSU_VERSION=11998/ccflags-y += -DKSU_VERSION=12453/' ./Makefile
-          
-          GIT_COMMIT_COUNT=$(/usr/bin/git rev-list --count HEAD)
-          echo "Git commit count: $GIT_COMMIT_COUNT"
-          
-          KSU_VERSION=$(expr $GIT_COMMIT_COUNT + 10198)
+          curl -LSs "https://raw.githubusercontent.com/KernelSU-Next/KernelSU-Next/next/kernel/setup.sh" | bash -s next          
+          git submodule update --init --recursive
+          cd KernelSU-Next/kernel
+          KSU_VERSION=$(expr $(/usr/bin/git rev-list --count HEAD) "+" 10200)
           echo "KSUVER=$KSU_VERSION" >> $GITHUB_ENV
-          sed -i "s/DKSU_VERSION=11998/DKSU_VERSION=${KSU_VERSION}/" ./Makefile
+          sed -i "s/DKSU_VERSION=11998/DKSU_VERSION=${KSU_VERSION}/" Makefile
           
       - name: Apply SUSFS Patches
         run: |
