@@ -59,8 +59,7 @@ jobs:
           git clone https://github.com/Kernel-SU/AnyKernel3 --depth=1
           git clone https://gitlab.com/simonpunk/susfs4ksu.git -b "$SUSFS_BRANCH"
           git clone https://github.com/TheWildJames/kernel_patches.git
-          git clone https://github.com/google/bbr.git -b v3
-        
+       
       - name: Initialize and Sync Kernel Source
         run: |
           echo "Creating folder for configuration: $CONFIG..."
@@ -73,13 +72,20 @@ jobs:
 
           # Sync repo and apply patches
           $REPO --version
-          $REPO --trace sync -c -j$(nproc --all) --no-tags --fail-fast      
+          $REPO --trace sync -c -j$(nproc --all) --no-tags --fail-fast
+
+      - name: Fetch BBRV3 branch
+        run: |
+         cd "$CONFIG/kernel_platform"
+         git fetch origin google-bbr/v3
       
       - name: Add BBRV3
         run: |
           echo "Add BBRV3"
           cd "$CONFIG/kernel_platform"
-          cp /home/runner/work/O11/O11/bbr/net/ipv4/tcp_bbr.c ./common/net/ipv4/
+          git restore --source=google-bbr/v3 -- net/ipv4/tcp_bbr.c net/ipv4/tcp_cong.c include/net/tcp.h
+          git add net/ipv4/tcp_bbr.c net/ipv4/tcp_cong.c include/net/tcp.h
+          git commit -m "Merge BBR v3 files (tcp_bbr.c, tcp_cong.c, tcp.h) into kernel"
       
       - name: Add KernelSU
         run: |
@@ -178,21 +184,11 @@ jobs:
           echo "CONFIG_DEFAULT_BBR=y" >> ./common/arch/arm64/configs/gki_defconfig
           echo "CONFIG_DEFAULT_TCP_CONG=\"bbr\"" >> ./common/arch/arm64/configs/gki_defconfig
           echo "CONFIG_DEFAULT_CUBIC=n" >> ./common/arch/arm64/configs/gki_defconfig
-          echo "CONFIG_TCP_CONG_CDG=y" >> ./common/arch/arm64/configs/gki_defconfig
-          echo "CONFIG_DEFAULT_CDG=n" >> ./common/arch/arm64/configs/gki_defconfig
-          echo "CONFIG_TCP_CONG_BIC=n" >> ./common/arch/arm64/configs/gki_defconfig
-          echo "CONFIG_TCP_CONG_WESTWOOD=n" >> ./common/arch/arm64/configs/gki_defconfig
-          echo "CONFIG_TCP_CONG_HTCP=n" >> ./common/arch/arm64/configs/gki_defconfig
-          echo "CONFIG_TCP_PACING=y" >> ./common/arch/arm64/configs/gki_defconfig
-          echo "CONFIG_NET_SCH_DEFAULT=y" >> ./common/arch/arm64/configs/gki_defconfig
+          echo "CONFIG_TCP_CONG_CDG=y" >> ./common/arch/arm64/configs/gki_defconfig          
           echo "CONFIG_NET_SCH_FQ=y" >> ./common/arch/arm64/configs/gki_defconfig
           echo "CONFIG_DEFAULT_FQ=y" >> ./common/arch/arm64/configs/gki_defconfig
           echo "CONFIG_DEFAULT_NET_SCH=\"fq\"" >> ./common/arch/arm64/configs/gki_defconfig
-          echo "CONFIG_NET_SCH_FQ_CODEL=y" >> ./common/arch/arm64/configs/gki_defconfig
-          echo "CONFIG_NET_SCH_HTB=n" >> ./common/arch/arm64/configs/gki_defconfig
-          echo "CONFIG_NET_SCH_PRIO=n" >> ./common/arch/arm64/configs/gki_defconfig
-          echo "CONFIG_NET_SCH_SFQ=n" >> ./common/arch/arm64/configs/gki_defconfig
-          echo "CONFIG_NET_SCH_TBF=n" >> ./common/arch/arm64/configs/gki_defconfig
+          echo "CONFIG_NET_SCH_FQ_CODEL=y" >> ./common/arch/arm64/configs/gki_defconfig          
 
           # ── ECN config setting ──
           echo "CONFIG_IP_NF_TARGET_ECN=y" >> ./common/arch/arm64/configs/gki_defconfig
@@ -203,11 +199,7 @@ jobs:
           # ── Strip debug to reduce size ──
           echo "CONFIG_DEBUG_KERNEL=n" >> ./common/arch/arm64/configs/gki_defconfig
           echo "CONFIG_DYNAMIC_DEBUG=n" >> ./common/arch/arm64/configs/gki_defconfig
-          echo "CONFIG_DEBUG_INFO=n" >> ./common/arch/arm64/configs/gki_defconfig
-          echo "CONFIG_RCU_TRACE=n" >> ./common/arch/arm64/configs/gki_defconfig
-          echo "CONFIG_RCU_LAZY_DEFAULT_OFF=n" >> ./common/arch/arm64/configs/gki_defconfig
-          echo "CONFIG_CONTEXT_SWITCH_TRACER=n" >> ./common/arch/arm64/configs/gki_defconfig
-          echo "CONFIG_NETFILTER_XT_TARGET_TRACE=n" >> ./common/arch/arm64/configs/gki_defconfig
+          echo "CONFIG_DEBUG_INFO=n" >> ./common/arch/arm64/configs/gki_defconfig          
       
       - name: Run sed and perl Commands
         run: |
