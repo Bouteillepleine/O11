@@ -74,15 +74,14 @@ jobs:
           $REPO --version
           $REPO --trace sync -c -j$(nproc --all) --no-tags --fail-fast
 
-      - name: Fetch BBRV3 branch
+      - name: Merge BBR v3 into Kernel Source       
         run: |
-         cd "$CONFIG/kernel_platform"
-         git fetch origin google-bbr/v3
-      
-      - name: Add BBRV3
-        run: |
-          echo "Add BBRV3"
           cd "$CONFIG/kernel_platform"
+          git config --global user.email "q543069760@gmail.com"
+          git config --global user.name "Build"
+          git remote add google-bbr https://github.com/google/bbr.git
+          git fetch google-bbr v3
+          git show-ref --verify --quiet refs/remotes/google-bbr/v3 || { echo "Error: google-bbr/v3 branch not found"; exit 1; }
           git restore --source=google-bbr/v3 -- net/ipv4/tcp_bbr.c net/ipv4/tcp_cong.c include/net/tcp.h
           git add net/ipv4/tcp_bbr.c net/ipv4/tcp_cong.c include/net/tcp.h
           git commit -m "Merge BBR v3 files (tcp_bbr.c, tcp_cong.c, tcp.h) into kernel"
