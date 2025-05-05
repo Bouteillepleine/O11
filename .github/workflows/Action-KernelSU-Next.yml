@@ -74,6 +74,15 @@ jobs:
           $REPO --version
           $REPO --trace sync -c -j$(nproc --all) --no-tags --fail-fast
 
+      - name: Debug BBR v3 Files
+        run: |
+         cd "$CONFIG/kernel_platform"
+         git fetch google-bbr v3
+         git ls-tree -r google-bbr/v3
+         env:
+         CONFIG: 13R
+         REPO: /home/runner/work/O11/O11/./git-repo/repo
+
       - name: Merge BBR v3 into Kernel Source
         run: |
          cd "$CONFIG/kernel_platform"
