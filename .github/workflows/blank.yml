@@ -1,0 +1,64 @@
+name: Export and Apply BBR Patches
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  patch-apply:
+    runs-on: ubuntu-latest
+
+    steps:
+      # Check out the Linux kernel repository
+      - name: Checkout Linux Kernel
+        uses: actions/checkout@v4
+        with:
+          repository: torvalds/linux
+          ref: master
+          fetch-depth: 0
+
+      # Install dependencies for kernel build and Git
+      - name: Install Dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y git build-essential libncurses-dev bison flex libssl-dev libelf-dev bc
+
+      # Add google-bbr remote and fetch v3 branch
+      - name: Fetch google-bbr/v3
+        run: |
+          git remote add google-bbr https://github.com/google/bbr.git
+          git fetch google-bbr v3
+          git show-ref --verify --quiet refs/remotes/google-bbr/v3 || { echo "Error: google-bbr/v3 branch not found"; exit 1; }
+
+      # Create a working branch
+      - name: Create Integration Branch
+        run: |
+          git checkout -b bbr-v3-integration
+
+      # Export and apply patches
+      - name: Export and Apply Patches
+        run: |
+          git format-patch google-bbr/v3 --stdout > bbr-v3.patches
+          git am bbr-v3.patches
+
+      # Run checkpatch.pl
+      - name: Run checkpatch.pl
+        run: |
+          scripts/checkpatch.pl --file net/ipv4/tcp_bbr.c
+
+      # Build the kernel
+      - name: Build Kernel
+        run: |
+          make defconfig
+          make -j$(nproc)
+
+      # Upload patches as artifact
+      - name: Upload Patches
+        uses: actions/upload-artifact@v4
+        with:
+          name: bbr-v3-patches
+          path: bbr-v3.patches
