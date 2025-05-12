@@ -48,6 +48,8 @@ jobs:
       # Create integration branch and merge
       - name: Merge Rebased Branch
         run: |
+          git config --global user.email "q543069760@gmail.com"
+          git config --global user.name "Build"
           git checkout -b bbr-v3-integration
           git merge google-bbr-v3-rebased
 
