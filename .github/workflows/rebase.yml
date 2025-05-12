@@ -1,0 +1,75 @@
+name: Rebase BBR onto Kernel
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  rebase:
+    runs-on: ubuntu-latest
+
+    steps:
+      # Check out the Linux kernel repository
+      - name: Checkout Linux Kernel
+        uses: actions/checkout@v4
+        with:
+          repository: torvalds/linux
+          ref: master
+          fetch-depth: 0
+
+      # Install dependencies for kernel build and Git
+      - name: Install Dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y git build-essential libncurses-dev bison flex libssl-dev libelf-dev bc
+
+      # Add google-bbr remote and fetch v3 branch
+      - name: Fetch google-bbr/v3
+        run: |
+          git remote add google-bbr https://github.com/google/bbr.git
+          git fetch google-bbr v3
+          git show-ref --verify --quiet refs/remotes/google-bbr/v3 || { echo "Error: google-bbr/v3 branch not found"; exit 1; }
+
+      # Create a rebased branch
+      - name: Create Rebased Branch
+        run: |
+          git checkout google-bbr/v3
+          git checkout -b google-bbr-v3-rebased
+
+      # Rebase onto master
+      - name: Rebase onto Master
+        run: |
+          git rebase origin/master
+
+      # Create integration branch and merge
+      - name: Merge Rebased Branch
+        run: |
+          git checkout -b bbr-v3-integration
+          git merge google-bbr-v3-rebased
+
+      # Run checkpatch.pl
+      - name: Run checkpatch.pl
+        run: |
+          scripts/checkpatch.pl --file net/ipv4/tcp_bbr.c
+
+      # Build the kernel
+      - name: Build Kernel
+        run: |
+          make defconfig
+          make -j$(nproc)
+
+      # Generate patches for inspection
+      - name: Generate Patches
+        run: |
+          git format-patch origin/master -o patches/
+
+      # Upload patches as artifact
+      - name: Upload Patches
+        uses: actions/upload-artifact@v4
+        with:
+          name: bbr-v3-rebased-patches
+          path: patches/
