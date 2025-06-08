@@ -95,6 +95,23 @@ jobs:
           cd ${{ inputs.DEVICE_PATH }}
           echo "COMMIT_ID=$(git rev-parse HEAD)" >> $GITHUB_ENV
 
+      # Patch BoardConfig.mk to add TW_MAX_BRIGHTNESS
+      - name: Patch Device Tree for TW_MAX_BRIGHTNESS
+        run: |
+          cd ${GITHUB_WORKSPACE}/OrangeFox/fox_${{ inputs.MANIFEST_BRANCH }}/${{ inputs.DEVICE_PATH }}
+          if [ -f BoardConfig.mk ]; then
+            # Check if TW_MAX_BRIGHTNESS is already set
+            if ! grep -q "TW_MAX_BRIGHTNESS" BoardConfig.mk; then
+              echo "TW_MAX_BRIGHTNESS := 255" >> BoardConfig.mk
+              echo "Added TW_MAX_BRIGHTNESS := 255 to BoardConfig.mk"
+            else
+              echo "TW_MAX_BRIGHTNESS already defined in BoardConfig.mk"
+            fi
+          else
+            echo "Error: BoardConfig.mk not found in ${{ inputs.DEVICE_PATH }}"
+            exit 1
+          fi
+
       # Build OrangeFox Recovery
       - name: Building OrangeFox
         run: |
