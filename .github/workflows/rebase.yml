@@ -85,9 +85,7 @@ jobs:
           git config --global user.email "${{ github.actor_id }}+${{ github.actor }}@users.noreply.github.com"
           git clone https://gitlab.com/OrangeFox/sync.git -b master
           cd sync
-          mkdir -p ${GITHUB_WORKSPACE}/OrangeFox/fox_${{ inputs.MANIFEST_BRANCH }}/.repo/local_manifests
-          echo '<?xml version="1.0" encoding="UTF-8"?><manifest><project name="OrangeFoxRecovery/OrangeFox" path="vendor/orangefox" remote="github" revision="fox_12.1" /></manifest>' > ${GITHUB_WORKSPACE}/OrangeFox/fox_${{ inputs.MANIFEST_BRANCH }}/.repo/local_manifests/roomservice.xml
-          ./orangefox_sync.sh --branch ${{ inputs.MANIFEST_BRANCH }} --path ${GITHUB_WORKSPACE}/OrangeFox/fox_${{ inputs.MANIFEST_BRANCH }}
+          ./orangefox_sync.sh --branch ${{ inputs.MANIFEST_BRANCH }} --path ${GITHUB_WORKSPACE}/OrangeFox/fox_${{ inputs.MANIFEST_BRANCH }} || { echo "Error: orangefox_sync.sh failed"; cat orangefox_sync.log || true; exit 1; }
 
       # Clone the device tree
       - name: Clone Device Tree
