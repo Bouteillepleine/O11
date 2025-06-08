@@ -56,7 +56,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      # Clean up the device space to free disk space
+      # Clean up the runner to free disk space
       - name: Clean-up
         uses: rokibhasansagar/slimhub_actions@main
 
@@ -70,10 +70,10 @@ jobs:
       - name: Build Environment
         run: |
           sudo apt update
-          sudo apt install aria2 bc bison build-essential ccache curl flex g++-multilib gcc-multilib git git-lfs gnupg gperf imagemagick lib32ncurses-dev libncurses5-dev lib32readline-dev lib32z1-dev libelf-dev liblz4-tool libsdl1.2-dev libssl-dev libxml2 libxml2-utils lzop maven pngcrush python3 python3-venv rsync schedtool squashfs-tools xsltproc zip zlib1g-dev -y
+          sudo apt install aria2 bc bison build-essential ccache curl flex g++-multilib gcc-multilib git git-lfs gnupg gperf imagemagick lib32ncurses-dev lib32readline-dev lib32z1-dev libelf-dev liblz4-tool libncurses-dev libsdl1.2-dev libssl-dev libxml2 libxml2-utils lzop maven pngcrush python3 python3-venv rsync schedtool squashfs-tools xsltproc zip zlib1g-dev -y
           git clone https://gitlab.com/OrangeFox/misc/scripts.git -b master
           cd scripts
-          sudo bash setup/android_build_env.sh
+          sudo bash setup/android_build_env.sh || { echo "Error: android_build_env.sh failed"; cat setup/android_build_env.sh | grep -C 5 error || true; exit 1; }
 
       # Initialize the OrangeFox manifest
       - name: Set-up Manifest
@@ -164,19 +164,30 @@ jobs:
             echo "Error: build/envsetup.sh not found"
             exit 1
           fi
+          echo "Checking if device/oneplus/giulia/AndroidProducts.mk exists"
+          if [ -f ${{ inputs.DEVICE_PATH }}/AndroidProducts.mk ]; then
+            echo "AndroidProducts.mk found, contents:"
+            cat ${{ inputs.DEVICE_PATH }}/AndroidProducts.mk
+            if ! grep -q "COMMON_LUNCH_CHOICES.*twrp_${{ inputs.DEVICE_NAME }}-eng" ${{ inputs.DEVICE_PATH }}/AndroidProducts.mk; then
+              echo "Warning: AndroidProducts.mk does not contain twrp_${{ inputs.DEVICE_NAME }}-eng, fixing it"
+              echo -e "PRODUCT_MAKEFILES := \$(LOCAL_DIR)/twrp_${{ inputs.DEVICE_NAME }}.mk\nCOMMON_LUNCH_CHOICES := twrp_${{ inputs.DEVICE_NAME }}-eng" > ${{ inputs.DEVICE_PATH }}/AndroidProducts.mk
+              echo "Updated AndroidProducts.mk contents:"
+              cat ${{ inputs.DEVICE_PATH }}/AndroidProducts.mk
+            fi
+          else
+            echo "Warning: AndroidProducts.mk not found, creating with twrp_${{ inputs.DEVICE_NAME }}-eng"
+            echo -e "PRODUCT_MAKEFILES := \$(LOCAL_DIR)/twrp_${{ inputs.DEVICE_NAME }}.mk\nCOMMON_LUNCH_CHOICES := twrp_${{ inputs.DEVICE_NAME }}-eng" > ${{ inputs.DEVICE_PATH }}/AndroidProducts.mk
+          fi
           echo "Checking if device/oneplus/giulia/vendorsetup.sh exists"
           if [ -f ${{ inputs.DEVICE_PATH }}/vendorsetup.sh ]; then
             echo "vendorsetup.sh found, contents:"
             cat ${{ inputs.DEVICE_PATH }}/vendorsetup.sh
-            if ! grep -q "add_lunch_combo.*twrp_${{ inputs.DEVICE_NAME }}-eng" ${{ inputs.DEVICE_PATH }}/vendorsetup.sh; then
-              echo "Warning: vendorsetup.sh does not contain twrp_${{ inputs.DEVICE_NAME }}-eng, fixing it"
-              echo "add_lunch_combo twrp_${{ inputs.DEVICE_NAME }}-eng" > ${{ inputs.DEVICE_PATH }}/vendorsetup.sh
+            if grep -q "add_lunch_combo" ${{ inputs.DEVICE_PATH }}/vendorsetup.sh; then
+              echo "Warning: vendorsetup.sh contains obsolete add_lunch_combo, clearing it"
+              echo "" > ${{ inputs.DEVICE_PATH }}/vendorsetup.sh
               echo "Updated vendorsetup.sh contents:"
               cat ${{ inputs.DEVICE_PATH }}/vendorsetup.sh
             fi
-          else
-            echo "Warning: vendorsetup.sh not found, creating with twrp_${{ inputs.DEVICE_NAME }}-eng"
-            echo "add_lunch_combo twrp_${{ inputs.DEVICE_NAME }}-eng" > ${{ inputs.DEVICE_PATH }}/vendorsetup.sh
           fi
           echo "Sourcing build/envsetup.sh with debug output"
           set -x  # Enable shell debugging
