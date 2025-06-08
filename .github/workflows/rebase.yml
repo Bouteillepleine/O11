@@ -148,11 +148,17 @@ jobs:
       - name: Building OrangeFox
         run: |
           cd ${GITHUB_WORKSPACE}/OrangeFox/fox_${{ inputs.MANIFEST_BRANCH }}
-          source build/envsetup.sh
+          echo "Sourcing build/envsetup.sh"
+          source build/envsetup.sh || { echo "Error: Sourcing build/envsetup.sh failed"; exit 1; }
           export ALLOW_MISSING_DEPENDENCIES=true
-          lunch twrp_${{ inputs.DEVICE_NAME }}-eng
-          make clean
-          mka adbd ${{ inputs.BUILD_TARGET }}image
+          echo "Available lunch targets:"
+          lunch | grep twrp || echo "No twrp targets found"
+          echo "Running lunch twrp_${{ inputs.DEVICE_NAME }}-eng"
+          lunch twrp_${{ inputs.DEVICE_NAME }}-eng || { echo "Error: lunch twrp_${{ inputs.DEVICE_NAME }}-eng failed"; cat out/error.log || true; exit 1; }
+          echo "Running make clean"
+          make clean || { echo "Error: make clean failed"; exit 1; }
+          echo "Running mka adbd ${{ inputs.BUILD_TARGET }}image"
+          mka adbd ${{ inputs.BUILD_TARGET }}image || { echo "Error: mka adbd ${{ inputs.BUILD_TARGET }}image failed"; cat out/error.log || true; exit 1; }
 
       # Set release properties (e.g., build date)
       - name: Set Release Properties
