@@ -120,7 +120,7 @@ jobs:
           if [ -f twrp_${{ inputs.DEVICE_NAME }}.mk ]; then
             echo "Checking twrp_${{ inputs.DEVICE_NAME }}.mk for OrangeFox variables"
             if ! grep -q "TW_MAX_BRIGHTNESS" twrp_${{ inputs.DEVICE_NAME }}.mk; then
-              echo -e "\n# OrangeFox settings\nTW_MAX_BRIGHTNESS := 255\nTW_DEFAULT_BRIGHTNESS := 128\nTW_THEME := portrait_hdpi\nTW_INCLUDE_CRYPTO := true" >> twrp_${{ inputs.DEVICE_NAME }}.mk
+              echo -e "\n# OrangeFox settings\nTW_MAX_BRIGHTNESS := 255\nTW_DEFAULT_BRIGHTNESS := 128\nTW_THEME := portrait_hdpi\nTW_INCLUDE_CRYPTO := true\nTW_INCLUDE_FBE := true\nTW_INCLUDE_FASTBOOTD := true\nTW_INCLUDE_NTFS_3G := true" >> twrp_${{ inputs.DEVICE_NAME }}.mk
               echo "Added OrangeFox variables to twrp_${{ inputs.DEVICE_NAME }}.mk"
               patched=true
             else
@@ -133,7 +133,7 @@ jobs:
               mk_file=$(basename "$mk_file")
               echo "Checking $mk_file for OrangeFox variables"
               if ! grep -q "TW_MAX_BRIGHTNESS" "$mk_file"; then
-                echo -e "\n# OrangeFox settings\nTW_MAX_BRIGHTNESS := 255\nTW_DEFAULT_BRIGHTNESS := 128\nTW_THEME := portrait_hdpi\nTW_INCLUDE_CRYPTO := true" >> "$mk_file"
+                echo -e "\n# OrangeFox settings\nTW_MAX_BRIGHTNESS := 255\nTW_DEFAULT_BRIGHTNESS := 128\nTW_THEME := portrait_hdpi\nTW_INCLUDE_CRYPTO := true\nTW_INCLUDE_FBE := true\nTW_INCLUDE_FASTBOOTD := true\nTW_INCLUDE_NTFS_3G := true" >> "$mk_file"
                 echo "Added OrangeFox variables to $mk_file"
                 patched=true
               else
@@ -143,7 +143,7 @@ jobs:
           fi
           if [ ! -n "$(find . -maxdepth 1 -type f -name '*.mk')" ]; then
             echo "No .mk files found in ${{ inputs.DEVICE_PATH }}. Creating orangefox.mk"
-            echo -e "# OrangeFox Recovery configuration\nTW_MAX_BRIGHTNESS := 255\nTW_DEFAULT_BRIGHTNESS := 128\nTW_THEME := portrait_hdpi\nTW_INCLUDE_CRYPTO := true" > orangefox.mk
+            echo -e "# OrangeFox Recovery configuration\nTW_MAX_BRIGHTNESS := 255\nTW_DEFAULT_BRIGHTNESS := 128\nTW_THEME := portrait_hdpi\nTW_INCLUDE_CRYPTO := true\nTW_INCLUDE_FBE := true\nTW_INCLUDE_FASTBOOTD := true\nTW_INCLUDE_NTFS_3G := true" > orangefox.mk
             patched=true
           fi
           if [ "$patched" = false ] && [ -n "$(find . -maxdepth 1 -type f -name '*.mk')" ]; then
@@ -157,6 +157,14 @@ jobs:
       - name: Building OrangeFox
         run: |
           cd ${GITHUB_WORKSPACE}/OrangeFox/fox_${{ inputs.MANIFEST_BRANCH }}
+          echo "Checking vendor/twrp presence"
+          if [ -d vendor/twrp ]; then
+            echo "vendor/twrp found, listing contents:"
+            ls -la vendor/twrp
+          else
+            echo "Error: vendor/twrp not found"
+            exit 1
+          fi
           echo "Checking if build/envsetup.sh exists"
           if [ -f build/envsetup.sh ]; then
             echo "build/envsetup.sh found"
@@ -182,8 +190,8 @@ jobs:
           if [ -f ${{ inputs.DEVICE_PATH }}/vendorsetup.sh ]; then
             echo "vendorsetup.sh found, contents:"
             cat ${{ inputs.DEVICE_PATH }}/vendorsetup.sh
-            if grep -q "add_lunch_combo" ${{ inputs.DEVICE_PATH }}/vendorsetup.sh; then
-              echo "Warning: vendorsetup.sh contains obsolete add_lunch_combo, clearing it"
+            if grep -q "add_lunch_combo" ${{ inputs.DEVICE_PATH }}/vendorsetup.sh || grep -q "ALLOW_MISSING_DEPENDENCIES" ${{ inputs.DEVICE_PATH }}/vendorsetup.sh; then
+              echo "Warning: vendorsetup.sh contains obsolete add_lunch_combo or redundant ALLOW_MISSING_DEPENDENCIES, clearing it"
               echo "" > ${{ inputs.DEVICE_PATH }}/vendorsetup.sh
               echo "Updated vendorsetup.sh contents:"
               cat ${{ inputs.DEVICE_PATH }}/vendorsetup.sh
@@ -191,8 +199,10 @@ jobs:
           fi
           echo "Sourcing build/envsetup.sh with debug output"
           set -x  # Enable shell debugging
-          source build/envsetup.sh || { echo "Error: Sourcing build/envsetup.sh failed"; tail -n 50 build/envsetup.sh; ls -la vendor/*/build/envsetup.sh || true; exit 1; }
+          source build/envsetup.sh > envsetup.log 2>&1 || { echo "Error: Sourcing build/envsetup.sh failed"; tail -n 100 envsetup.log; tail -n 50 build/envsetup.sh; ls -la vendor/*/build/envsetup.sh || true; exit 1; }
           set +x  # Disable shell debugging
+          echo "envsetup.sh output:"
+          cat envsetup.log
           export ALLOW_MISSING_DEPENDENCIES=true
           echo "Available lunch targets:"
           lunch | grep twrp || echo "No twrp targets found"
@@ -215,7 +225,7 @@ jobs:
         with:
           files: |
             OrangeFox/fox_${{ inputs.MANIFEST_BRANCH }}/out/target/product/${{ inputs.DEVICE_NAME }}/OrangeFox*.img
-            OrangeFox/fox_${{ inputs.MANIFEST_BRANCH }}/out/target/product/${{ inputs.DEVICE_NAME }}/OrangeFox*.zip
+            OrangeFox/fox_${{ inputs.MANIFEST_BRANCH }}/out/target/product/${{ inputs.DEVICE_NAME }}/out/target/product/${{ inputs.DEVICE_NAME }}/OrangeFox*.zip
           name: OrangeFox Recovery for ${{ inputs.DEVICE_NAME }} // ${{ env.BUILD_DATE }}
           tag_name: ${{ github.run_id }}
           body: |
