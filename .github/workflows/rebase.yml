@@ -85,6 +85,8 @@ jobs:
           git config --global user.email "${{ github.actor_id }}+${{ github.actor }}@users.noreply.github.com"
           git clone https://gitlab.com/OrangeFox/sync.git -b master
           cd sync
+          mkdir -p ${GITHUB_WORKSPACE}/OrangeFox/fox_${{ inputs.MANIFEST_BRANCH }}/.repo/local_manifests
+          echo '<?xml version="1.0" encoding="UTF-8"?><manifest><project name="OrangeFoxRecovery/recovery" path="bootable/recovery" remote="github" revision="fox_12.1" /><project name="TeamWin/android_vendor_twrp" path="vendor/twrp" remote="github" revision="android-12.1" /></manifest>' > ${GITHUB_WORKSPACE}/OrangeFox/fox_${{ inputs.MANIFEST_BRANCH }}/.repo/local_manifests/roomservice.xml
           ./orangefox_sync.sh --branch ${{ inputs.MANIFEST_BRANCH }} --path ${GITHUB_WORKSPACE}/OrangeFox/fox_${{ inputs.MANIFEST_BRANCH }} || { echo "Error: orangefox_sync.sh failed"; cat orangefox_sync.log || true; exit 1; }
 
       # Clone the device tree
@@ -165,6 +167,8 @@ jobs:
             echo "Error: vendor/twrp not found"
             exit 1
           fi
+          echo "Checking OrangeFox recovery files"
+          ls -la bootable/recovery/orangefox* || echo "No orangefox files found in bootable/recovery"
           echo "Checking if build/envsetup.sh exists"
           if [ -f build/envsetup.sh ]; then
             echo "build/envsetup.sh found"
@@ -197,9 +201,17 @@ jobs:
               cat ${{ inputs.DEVICE_PATH }}/vendorsetup.sh
             fi
           fi
+          echo "Validating twrp_${{ inputs.DEVICE_NAME }}.mk"
+          if [ -f ${{ inputs.DEVICE_PATH }}/twrp_${{ inputs.DEVICE_NAME }}.mk ]; then
+            echo "twrp_${{ inputs.DEVICE_NAME }}.mk contents:"
+            cat ${{ inputs.DEVICE_PATH }}/twrp_${{ inputs.DEVICE_NAME }}.mk
+          else
+            echo "Error: twrp_${{ inputs.DEVICE_NAME }}.mk not found"
+            exit 1
+          fi
           echo "Sourcing build/envsetup.sh with debug output"
           set -x  # Enable shell debugging
-          source build/envsetup.sh > envsetup.log 2>&1 || { echo "Error: Sourcing build/envsetup.sh failed"; tail -n 100 envsetup.log; tail -n 50 build/envsetup.sh; ls -la vendor/*/build/envsetup.sh || true; exit 1; }
+          bash -x build/envsetup.sh > envsetup.log 2>&1 || { echo "Error: Sourcing build/envsetup.sh failed"; tail -n 200 envsetup.log; tail -n 50 build/envsetup.sh; ls -la vendor/*/build/envsetup.sh || true; cat vendor/twrp/build/envsetup.sh || true; exit 1; }
           set +x  # Disable shell debugging
           echo "envsetup.sh output:"
           cat envsetup.log
@@ -225,7 +237,7 @@ jobs:
         with:
           files: |
             OrangeFox/fox_${{ inputs.MANIFEST_BRANCH }}/out/target/product/${{ inputs.DEVICE_NAME }}/OrangeFox*.img
-            OrangeFox/fox_${{ inputs.MANIFEST_BRANCH }}/out/target/product/${{ inputs.DEVICE_NAME }}/out/target/product/${{ inputs.DEVICE_NAME }}/OrangeFox*.zip
+            OrangeFox/fox_${{ inputs.MANIFEST_BRANCH }}/out/target/product/${{ inputs.DEVICE_NAME }}/OrangeFox*.zip
           name: OrangeFox Recovery for ${{ inputs.DEVICE_NAME }} // ${{ env.BUILD_DATE }}
           tag_name: ${{ github.run_id }}
           body: |
