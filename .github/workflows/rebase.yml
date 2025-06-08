@@ -95,20 +95,36 @@ jobs:
           cd ${{ inputs.DEVICE_PATH }}
           echo "COMMIT_ID=$(git rev-parse HEAD)" >> $GITHUB_ENV
 
-      # Patch orangefox.mk to add TW_MAX_BRIGHTNESS
+      # Patch all .mk files to add TW_MAX_BRIGHTNESS
       - name: Patch Device Tree for TW_MAX_BRIGHTNESS
         run: |
           cd ${GITHUB_WORKSPACE}/OrangeFox/fox_${{ inputs.MANIFEST_BRANCH }}/${{ inputs.DEVICE_PATH }}
-          if [ -f orangefox.mk ]; then
-            # Check if TW_MAX_BRIGHTNESS is already set
-            if ! grep -q "TW_MAX_BRIGHTNESS" orangefox.mk; then
-              echo "TW_MAX_BRIGHTNESS := 255" >> orangefox.mk
-              echo "Added TW_MAX_BRIGHTNESS := 255 to orangefox.mk"
+          patched=false
+          # Find all .mk files in the device tree directory
+          for mk_file in $(find . -maxdepth 1 -type f -name "*.mk"); do
+            mk_file=$(basename "$mk_file")
+            echo "Checking $mk_file for TW_MAX_BRIGHTNESS"
+            # Check if TW_MAX_BRIGHTNESS is already defined
+            if ! grep -q "TW_MAX_BRIGHTNESS" "$mk_file"; then
+              echo "TW_MAX_BRIGHTNESS := 255" >> "$mk_file"
+              echo "Added TW_MAX_BRIGHTNESS := 255 to $mk_file"
+              patched=true
             else
-              echo "TW_MAX_BRIGHTNESS already defined in orangefox.mk"
+              echo "TW_MAX_BRIGHTNESS already defined in $mk_file"
             fi
-          else
-            echo "Error: orangefox.mk not found in ${{ inputs.DEVICE_PATH }}"
+          done
+          # If no .mk files were found, create orangefox.mk as a fallback
+          if [ ! -n "$(find . -maxdepth 1 -type f -name '*.mk')" ]; then
+            echo "No .mk files found in ${{ inputs.DEVICE_PATH }}. Creating orangefox.mk"
+            echo "# OrangeFox Recovery configuration" > orangefox.mk
+            echo "TW_MAX_BRIGHTNESS := 255" >> orangefox.mk
+            patched=true
+          fi
+          # Fail if no patching was done
+          if [ "$patched" = false ] && [ -n "$(find . -maxdepth 1 -type f -name '*.mk')" ]; then
+            echo "Warning: TW_MAX_BRIGHTNESS was already defined in all .mk files"
+          elif [ "$patched" = false ]; then
+            echo "Error: No .mk files found and unable to create orangefox.mk"
             exit 1
           fi
 
