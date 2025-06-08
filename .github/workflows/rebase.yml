@@ -56,7 +56,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      # Clean up the runner to free disk space
+      # Clean up the device space to free disk space
       - name: Clean-up
         uses: rokibhasansagar/slimhub_actions@main
 
@@ -70,7 +70,7 @@ jobs:
       - name: Build Environment
         run: |
           sudo apt update
-          sudo apt install aria2 bc bison build-essential ccache curl flex g++-multilib gcc-multilib git git-lfs gnupg gperf imagemagick lib32ncurses-dev lib32readline-dev lib32z1-dev libelf-dev liblz4-tool libncurses-dev libsdl1.2-dev libssl-dev libxml2 libxml2-utils lzop maven pngcrush python3 python3-venv rsync schedtool squashfs-tools xsltproc zip zlib1g-dev -y
+          sudo apt install aria2 bc bison build-essential ccache curl flex g++-multilib gcc-multilib git git-lfs gnupg gperf imagemagick lib32ncurses-dev libncurses5-dev lib32readline-dev lib32z1-dev libelf-dev liblz4-tool libsdl1.2-dev libssl-dev libxml2 libxml2-utils lzop maven pngcrush python3 python3-venv rsync schedtool squashfs-tools xsltproc zip zlib1g-dev -y
           git clone https://gitlab.com/OrangeFox/misc/scripts.git -b master
           cd scripts
           sudo bash setup/android_build_env.sh
@@ -122,7 +122,7 @@ jobs:
           if [ "$patched" = false ]; then
             for mk_file in $(find . -maxdepth 1 -type f -name "*.mk" ! -name "twrp_giulia.mk"); do
               mk_file=$(basename "$mk_file")
-              echo "Checking $mk_file for TW_MAX_BRIGHTNESS"
+              echo "Checking $mk_file for OrangeFox variables"
               if ! grep -q "TW_MAX_BRIGHTNESS" "$mk_file"; then
                 echo "TW_MAX_BRIGHTNESS := 255" >> "$mk_file"
                 echo "TW_DEFAULT_BRIGHTNESS := 128" >> "$mk_file"
@@ -168,13 +168,19 @@ jobs:
           if [ -f ${{ inputs.DEVICE_PATH }}/vendorsetup.sh ]; then
             echo "vendorsetup.sh found, contents:"
             cat ${{ inputs.DEVICE_PATH }}/vendorsetup.sh
+            if ! grep -q "add_lunch_combo.*twrp_${{ inputs.DEVICE_NAME }}-eng" ${{ inputs.DEVICE_PATH }}/vendorsetup.sh; then
+              echo "Warning: vendorsetup.sh does not contain twrp_${{ inputs.DEVICE_NAME }}-eng, fixing it"
+              echo "add_lunch_combo twrp_${{ inputs.DEVICE_NAME }}-eng" > ${{ inputs.DEVICE_PATH }}/vendorsetup.sh
+              echo "Updated vendorsetup.sh contents:"
+              cat ${{ inputs.DEVICE_PATH }}/vendorsetup.sh
+            fi
           else
-            echo "Warning: vendorsetup.sh not found, creating with twrp_giulia-eng"
-            echo "add_lunch_combo twrp_giulia-eng" > ${{ inputs.DEVICE_PATH }}/vendorsetup.sh
+            echo "Warning: vendorsetup.sh not found, creating with twrp_${{ inputs.DEVICE_NAME }}-eng"
+            echo "add_lunch_combo twrp_${{ inputs.DEVICE_NAME }}-eng" > ${{ inputs.DEVICE_PATH }}/vendorsetup.sh
           fi
           echo "Sourcing build/envsetup.sh with debug output"
           set -x  # Enable shell debugging
-          source build/envsetup.sh || { echo "Error: Sourcing build/envsetup.sh failed"; cat build/envsetup.sh | grep -C 5 error || true; exit 1; }
+          source build/envsetup.sh || { echo "Error: Sourcing build/envsetup.sh failed"; cat build/envsetup.sh | grep -C 10 error || true; exit 1; }
           set +x  # Disable shell debugging
           export ALLOW_MISSING_DEPENDENCIES=true
           echo "Available lunch targets:"
