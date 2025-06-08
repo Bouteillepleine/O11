@@ -1,58 +1,113 @@
-name: Build TWRP for OnePlus 13R (giulia)
+ame: OrangeFox - Build
+
+# Credits to:
+# https://github.com/TeamWin
+# https://gitlab.com/OrangeFox
+# https://github.com/azwhikaru for Recovery Builder Template
+# And all Contributors in every repositories I used
 
 on:
   workflow_dispatch:
+    inputs:
+      MANIFEST_BRANCH:
+        description: 'OrangeFox Manifest Branch'
+        required: true
+        default: '12.1'
+        type: choice
+        options:
+        - 12.1
+        - 11.0
+      DEVICE_TREE:
+        description: 'OrangeFox Device Tree'
+        required: true
+        default: 'https://github.com/cd-Crypton/custom_recovery_tree_realme_nashc'
+      DEVICE_TREE_BRANCH:
+        description: 'OrangeFox Device Tree Branch'
+        required: true
+        default: 'android-12.1'
+      DEVICE_PATH:
+        description: 'Specify your Device Path'
+        required: true
+        default: 'device/realme/nashc'
+      DEVICE_NAME:
+        description: 'Specify your Device Codename'
+        required: true
+        default: 'nashc'
+      BUILD_TARGET:
+        description: 'Specify your Build Target'
+        required: true
+        default: 'recovery'
+        type: choice
+        options:
+        - boot
+        - recovery
+        - vendorboot
 
 jobs:
   build:
+    name: Build OFR by ${{ github.actor }}
     runs-on: ubuntu-latest
-
+    env:
+      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    permissions:
+      contents: write
     steps:
-    - name: Checkout source
+    - name: Checkout
       uses: actions/checkout@v4
+              
+    - name: Clean-up
+      uses: rokibhasansagar/slimhub_actions@main
 
-    - name: Set up Git identity
+    - name: Swap Space
+      uses: pierotofy/set-swap-space@master
+      with:
+        swap-size-gb: 24
+      
+    - name: Build Environment
       run: |
-        git config --global user.name "GitHub Actions"
-        git config --global user.email "actions@github.com"
-
-    - name: Install dependencies
+        sudo apt install aria2 -y
+        git clone https://gitlab.com/OrangeFox/misc/scripts.git -b master
+        cd scripts
+        sudo bash setup/android_build_env.sh
+      
+    - name: Set-up Manifest
+      if: inputs.MANIFEST_BRANCH == '11.0' || inputs.MANIFEST_BRANCH == '12.1'
       run: |
-        sudo apt-get update
-        sudo apt-get install -y git repo build-essential bc
-
-    - name: Initialize repo
+        mkdir -p ${GITHUB_WORKSPACE}/OrangeFox
+        cd ${GITHUB_WORKSPACE}/OrangeFox
+        git config --global user.name "${{ github.actor }}"
+        git config --global user.email "${{ github.actor_id }}+${{ github.actor }}@users.noreply.github.com"
+        git clone https://gitlab.com/OrangeFox/sync.git -b master
+        cd sync
+        ./orangefox_sync.sh --branch ${{ inputs.MANIFEST_BRANCH }} --path ${GITHUB_WORKSPACE}/OrangeFox/fox_${{ inputs.MANIFEST_BRANCH }}
+    - name: Clone Device Tree
       run: |
-        mkdir -p workspace && cd workspace
-        repo init -u https://github.com/minimal-manifest-twrp/platform_manifest_twrp_aosp.git -b twrp-12.1
-
-    - name: Add local manifest for giulia
+        cd ${GITHUB_WORKSPACE}/OrangeFox/fox_${{ inputs.MANIFEST_BRANCH }}
+        git clone ${{ inputs.DEVICE_TREE }} -b ${{ inputs.DEVICE_TREE_BRANCH }} ./${{ inputs.DEVICE_PATH }}
+        cd ${{ inputs.DEVICE_PATH }}
+        echo "COMMIT_ID=$(git rev-parse HEAD)" >> $GITHUB_ENV
+    - name: Building OrangeFox
       run: |
-        cd workspace
-        mkdir -p .repo/local_manifests
-        cat <<EOF > .repo/local_manifests/giulia.xml
-        <?xml version="1.0" encoding="UTF-8"?>
-        <manifest>
-            <remote name="github" fetch="https://github.com/" />
-            <project path="device/oneplus/giulia" name="your-username/android_device_oneplus_giulia" remote="github" revision="twrp-12.1" />
-        </manifest>
-        EOF
-
-    - name: Sync repo
-      run: |
-        cd workspace
-        repo sync --force-sync --no-clone-bundle --no-tags -j$(nproc)
-
-    - name: Build TWRP
-      run: |
-        cd workspace
+        cd ${GITHUB_WORKSPACE}/OrangeFox/fox_${{ inputs.MANIFEST_BRANCH }}
+        set +e
         source build/envsetup.sh
         export ALLOW_MISSING_DEPENDENCIES=true
-        lunch twrp_giulia-eng
-        mka recoveryimage
-
-    - name: Upload built image
-      uses: actions/upload-artifact@v4
+        set -e
+        lunch twrp_${{ inputs.DEVICE_NAME }}-eng && make clean && mka adbd ${{ inputs.BUILD_TARGET }}image
+    - name: Set Release Properties
+      run: |
+        echo "BUILD_DATE=$(TZ=Asia/Manila date +%Y%m%d)" >> $GITHUB_ENV
+        cd ${GITHUB_WORKSPACE}/OrangeFox/fox_${{ inputs.MANIFEST_BRANCH }}
+    - name: Upload to Release
+      uses: softprops/action-gh-release@v2
       with:
-        name: twrp-output
-        path: workspace/out/target/product/giulia/recovery.img
+        files: |
+          OrangeFox/fox_${{ inputs.MANIFEST_BRANCH }}/out/target/product/${{ inputs.DEVICE_NAME }}/OrangeFox*.img
+          OrangeFox/fox_${{ inputs.MANIFEST_BRANCH }}/out/target/product/${{ inputs.DEVICE_NAME }}/OrangeFox*.zip
+        name: OrangeFox Recovery for ${{ inputs.DEVICE_NAME }} // ${{ env.BUILD_DATE }}
+        tag_name: ${{ github.run_id }}
+        body: |
+          ## OrangeFox Recovery Build - Unofficial
+          Build: fox_${{ inputs.MANIFEST_BRANCH }}
+          Device: [Device Tree/Branch](${{ inputs.DEVICE_TREE }}/tree/${{ inputs.DEVICE_TREE_BRANCH }})
+          Commit: Most recent [commit](${{ inputs.DEVICE_TREE }}/commit/${{ env.COMMIT_ID }}) during building.
