@@ -1,68 +1,58 @@
-name: Export and Apply BBR Patches
+name: Build TWRP for OnePlus 13R (giulia)
 
 on:
-  push:
-    branches:
-      - main
-  pull_request:
-    branches:
-      - main
+  workflow_dispatch:
 
 jobs:
-  patch-apply:
+  build:
     runs-on: ubuntu-latest
 
     steps:
-      # Check out the Linux kernel repository
-      - name: Checkout Linux Kernel
-        uses: actions/checkout@v4
-        with:
-          repository: torvalds/linux
-          ref: master
-          fetch-depth: 0
+    - name: Checkout source
+      uses: actions/checkout@v3
 
-      # Install dependencies for kernel build and Git
-      - name: Install Dependencies
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y git build-essential libncurses-dev bison flex libssl-dev libelf-dev bc
+    - name: Set up Git identity
+      run: |
+        git config --global user.name "GitHub Actions"
+        git config --global user.email "actions@github.com"
 
-      # Add google-bbr remote and fetch v3 branch
-      - name: Fetch google-bbr/v3
-        run: |
-          git config --global user.email "q543069760@gmail.com"
-          git config --global user.name "Build"
-          git remote add google-bbr https://github.com/google/bbr.git
-          git fetch google-bbr v3
-          git show-ref --verify --quiet refs/remotes/google-bbr/v3 || { echo "Error: google-bbr/v3 branch not found"; exit 1; }
+    - name: Install dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y git repo build-essential bc
 
-      # Create a working branch
-      - name: Create Integration Branch
-        run: |
-          git checkout -b bbr-v3-integration
+    - name: Initialize repo
+      run: |
+        mkdir -p workspace && cd workspace
+        repo init -u https://github.com/minimal-manifest-twrp/platform_manifest_twrp_aosp.git -b twrp-12.1
 
-      # Export and apply patches
-      - name: Export and Apply Patches
-        run: |
-          git config --global user.email "q543069760@gmail.com"
-          git config --global user.name "Build"
-          git format-patch google-bbr/v3 --stdout > bbr-v3.patches
-          git am bbr-v3.patches
+    - name: Add local manifest for giulia
+      run: |
+        cd workspace
+        mkdir -p .repo/local_manifests
+        cat <<EOF > .repo/local_manifests/giulia.xml
+        <?xml version="1.0" encoding="UTF-8"?>
+        <manifest>
+            <remote name="github" fetch="https://github.com/" />
+            <project path="device/oneplus/giulia" name="your-username/android_device_oneplus_giulia" remote="github" revision="twrp-12.1" />
+        </manifest>
+        EOF
 
-      # Run checkpatch.pl
-      - name: Run checkpatch.pl
-        run: |
-          scripts/checkpatch.pl --file net/ipv4/tcp_bbr.c
+    - name: Sync repo
+      run: |
+        cd workspace
+        repo sync --force-sync --no-clone-bundle --no-tags -j$(nproc)
 
-      # Build the kernel
-      - name: Build Kernel
-        run: |
-          make defconfig
-          make -j$(nproc)
+    - name: Build TWRP
+      run: |
+        cd workspace
+        source build/envsetup.sh
+        export ALLOW_MISSING_DEPENDENCIES=true
+        lunch twrp_giulia-eng
+        mka recoveryimage
 
-      # Upload patches as artifact
-      - name: Upload Patches
-        uses: actions/upload-artifact@v4
-        with:
-          name: bbr-v3-patches
-          path: bbr-v3.patches
+    - name: Upload built image
+      uses: actions/upload-artifact@v3
+      with:
+        name: twrp-output
+        path: workspace/out/target/product/giulia/recovery.img
